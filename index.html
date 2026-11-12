@@ -63,6 +63,7 @@ button.rank{display:flex;align-items:center;gap:10px;text-align:left} .rank .num
 <div id="app"></div>
 <script>
 window.TDD_SUPABASE = { url: "https://syndvtsdtpjbetzbzuzq.supabase.co", key: "sb_publishable_Y38ptqpz6_1jLgmFisG3fw_yvH69LiF" };
+window.TDD_BUILD = "public";
 </script>
 <script>
 // Data layer for the no-login version: Supabase over plain web requests, checked every few seconds.
@@ -118,175 +119,16 @@ function makeSupaDb(cfg) {
 }
 </script>
 <script>
-// Matching engine: groups are per company rep. Pure functions, no DOM.
-const Engine = (() => {
-  const LEVEL = { strong: 3, good: 2, weak: 1 };
-  const key = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
-  function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-  function roleScore(p, company) {
-    const ov = (p.fit || {})[company.name];
-    if (ov === 'strong') return 10; if (ov === 'good') return 5; if (ov === 'weak') return 0;
-    if (!(p.roles || []).length) return 4;
-    return p.roles.some(r => (company.wants || []).includes(r)) ? 10 : 0;
-  }
-  // null means this candidate must never be placed with this company
-  function fitScore(p, company) {
-    p = p || {};
-    if ((p.blocks || []).includes(company.name)) return null;
-    // stronger candidates get first call on a company that wants their role
-    return roleScore(p, company) * (1 + 0.15 * ((LEVEL[p.level] || 2) - 1)) + (LEVEL[p.level] || 2);
-  }
-  function history(prior, repCompany) {
-    const H = { rep: {}, comp: {}, pairs: new Set() };
-    for (const r of prior || []) for (const s of r.stations || []) {
-      const cs = s.cands || [];
-      cs.forEach((c, i) => {
-        (H.rep[c] = H.rep[c] || new Set()).add(s.rep);
-        if (repCompany[s.rep]) (H.comp[c] = H.comp[c] || new Set()).add(repCompany[s.rep]);
-        for (let j = i + 1; j < cs.length; j++) H.pairs.add(key(c, cs[j]));
-      });
-    }
-    return H;
-  }
-  function context(o) {
-    const companies = {}; for (const c of o.cfg.companies || []) companies[c.name] = c;
-    const repCompany = {}; for (const r of o.reps) repCompany[r.id] = r.company;
-    const comp = name => companies[name] || { name, wants: [] };
-    const F = {};
-    // A candidate with only one fitting company in the room gets priority for it
-    for (const c of o.cands) {
-      F[c.id] = {}; const p = o.priv[c.id] || {};
-      const present = [...new Set(o.reps.map(r => r.company))];
-      const n = present.filter(name => roleScore(p, comp(name)) > 0 && !(p.blocks || []).includes(name)).length;
-      for (const name of present) { const f = fitScore(p, comp(name)); F[c.id][name] = f == null ? null : f + (roleScore(p, comp(name)) > 0 ? 4 / n : 0); }
-    }
-    return { F, H: history(o.prior, repCompany), comp, repCompany };
-  }
-  function buildGroups(o) {
-    const { F, H, comp } = context(o);
-    const warnings = [], unplaced = [];
-    const reps = o.reps.slice();
-    if (!reps.length) return { stations: [], unplaced: o.cands.map(c => c.id), warnings: [{ text: 'No company reps are checked in.' }] };
-    const cands = [];
-    for (const c of o.cands) {
-      if (reps.every(r => F[c.id][r.company] == null)) { unplaced.push(c.id); warnings.push({ cand: c.id, text: 'blocked from every company in the room' }); }
-      else cands.push(c.id);
-    }
-    const first = !(o.prior || []).length;
-    const seedOf = id => first ? (o.priv[id] || {}).seed : null;
-    const multi = {}; for (const r of reps) multi[r.company] = reps.filter(x => x.company === r.company).length > 1;
-    const rolesOf = id => (o.priv[id] || {}).roles || [];
-    const shares = (a, b) => rolesOf(a).some(r => rolesOf(b).includes(r));
-    function cost(st) {
-      let t = 0; const sums = {};
-      for (const s of st) {
-        let sum = 0;
-        for (let i = 0; i < s.c.length; i++) {
-          const c = s.c[i], f = F[c][s.company];
-          if (f == null) { t += 1e5; continue; }
-          t -= f; sum += f;
-          if (seedOf(c) === s.rep) t -= 25;
-          if (H.rep[c] && H.rep[c].has(s.rep)) t += 300; else if (H.comp[c] && H.comp[c].has(s.company)) t += 100;
-          for (let j = i + 1; j < s.c.length; j++) {
-            if (H.pairs.has(key(c, s.c[j]))) t += 15;
-            if (multi[s.company] && shares(c, s.c[j])) t += 3;  // spread the same role across a company's reps
-          }
-        }
-        if (s.c.length) (sums[s.company] = sums[s.company] || []).push(sum / s.c.length);
-      }
-      for (const k in sums) { const a = sums[k]; if (a.length > 1) t += Math.max(...a) - Math.min(...a); }
-      return t;
-    }
-    const rand = rng(o.seedNum || 1);
-    let best = null, bestCost = Infinity;
-    for (let run = 0; run < 24; run++) {
-      const order = cands.slice(); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-      const st = reps.map(r => ({ rep: r.id, company: r.company, c: [] }));
-      const off = Math.floor(rand() * st.length);
-      order.forEach((c, i) => st[(i + off) % st.length].c.push(c));
-      let cur = cost(st), improved = true, guard = 0;
-      while (improved && guard++ < 200) {
-        improved = false;
-        for (let a = 0; a < st.length; a++) for (let b = 0; b < st.length; b++) {
-          if (a === b) continue;
-          const A = st[a].c, B = st[b].c;
-          if (A.length > B.length) for (let i = 0; i < A.length; i++) {  // move keeps sizes balanced
-            const c = A.splice(i, 1)[0]; B.push(c); const n = cost(st);
-            if (n < cur - 1e-9) { cur = n; improved = true; break; } B.pop(); A.splice(i, 0, c);
-          }
-          if (a < b) for (let i = 0; i < A.length; i++) for (let j = 0; j < B.length; j++) {
-            [A[i], B[j]] = [B[j], A[i]]; const n = cost(st);
-            if (n < cur - 1e-9) { cur = n; improved = true; } else [A[i], B[j]] = [B[j], A[i]];
-          }
-        }
-      }
-      if (cur < bestCost) { bestCost = cur; best = st.map(s => ({ rep: s.rep, company: s.company, c: s.c.slice() })); }
-    }
-    for (const s of best) s.c = s.c.filter(c => { if (F[c][s.company] == null) { unplaced.push(c); warnings.push({ cand: c, text: 'could not be placed without breaking a block' }); return false; } return true; });
-    const stations = best.map(s => ({ rep: s.rep, cands: s.c }));
-    warnings.push(...review({ ...o, stations }));
-    return { stations, unplaced, warnings, cost: bestCost };
-  }
-  // Plain-language notes on a set of groups, for the team preview
-  function review(o) {
-    const { F, H, comp, repCompany } = context(o); const out = [];
-    for (const s of o.stations) {
-      const company = repCompany[s.rep]; if (!company) continue;
-      if (!s.cands.length) out.push({ rep: s.rep, text: 'has no candidates this round' });
-      for (const c of s.cands) {
-        if (!F[c]) continue;
-        if (F[c][company] == null) out.push({ cand: c, text: 'is blocked from ' + company });
-        else if (H.rep[c] && H.rep[c].has(s.rep)) out.push({ cand: c, text: 'is meeting the same rep again' });
-        else if (H.comp[c] && H.comp[c].has(company)) out.push({ cand: c, text: 'is back with ' + company + ' (no other company fits or is free)' });
-        else if (!(o.prior || []).length && roleScore(o.priv[c] || {}, comp(company)) === 0) out.push({ cand: c, text: 'has no role match with ' + company });
-      }
-    }
-    return out;
-  }
-  // Late arrival: join the best-fit station with the fewest people, nobody else moves
-  function placeLate(o, candId) {
-    const { F, H, repCompany } = context({ ...o, cands: [{ id: candId }] });
-    let best = null, bc = Infinity;
-    for (const s of o.stations) {
-      const company = repCompany[s.rep]; if (!company) continue;
-      const f = F[candId][company]; if (f == null) continue;
-      let t = s.cands.length * 8 - f;
-      if (H.rep[candId] && H.rep[candId].has(s.rep)) t += 300; else if (H.comp[candId] && H.comp[candId].has(company)) t += 100;
-      if (t < bc) { bc = t; best = s.rep; }
-    }
-    return best;
-  }
-  return { buildGroups, placeLate, review, fitScore };
-})();
-if (typeof module !== 'undefined') module.exports = Engine;
-</script>
-<script>
 // Tech Hiring IRL: check-in, live groups per company rep, exit survey, team console.
 const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const COLORS = [['Green', '#3ecf8e'], ['Blue', '#4da3ff'], ['Yellow', '#ffd23f'], ['Pink', '#ff7ac3'], ['Purple', '#a98bff'], ['Teal', '#2fd3d0'], ['Red', '#ff5d5d'], ['White', '#f3efe7']];
 const ROLES = ['ML/AI', 'Full-stack', 'Software', 'Founding', 'Forward deployed', 'Security', 'QA'];
-const DEFAULT_CFG = {
-  minutes: 17,
-  companies: [
-    { name: 'Nestera', wants: ['Founding', 'Software'] },
-    { name: 'Cofactor AI', wants: ['ML/AI', 'Full-stack', 'Forward deployed', 'Security'] },
-    { name: 'CareLumi', wants: ['Full-stack'] }],
-  prompts: ['What AI tool are you most excited about right now, and why?', 'What is the most interesting innovation in healthcare technology to you?'],
-  goalCand: 'Leave knowing what is top of mind for this business and the challenges it is working through.',
-  goalRep: 'Leave knowing a piece of work this person is proud of and the work they want to do next.'
-};
+const DEFAULT_CFG = { minutes: 17, companies: [], prompts: [] };
 const SUPA = (typeof window !== 'undefined' && window.TDD_SUPABASE) || null;  // set on the no-login build
+const TEAM = !(typeof window !== 'undefined' && window.TDD_BUILD === 'public');  // the public page ships without the console
 const EV0 = { round: 0, endsAt: null, surveyOpen: false };
 const S = { ready: false, admin: false, people: {}, priv: {}, rounds: {}, ev: { ...EV0 }, survey: {}, cfg: DEFAULT_CFG, me: null, draft: {}, ui: { tab: 'roster', open: null }, proposal: null, sel: null, kiosk: null, toast: '' };
 try { S.me = localStorage.getItem('tdd-irl-me'); S.surveyDone = localStorage.getItem('tdd-irl-survey') === '1'; } catch (e) {}
-// Console gate. Only a fingerprint of the password is kept in the page.
-const PASS_MARK = '';  // not used on this build: the database checks the password
-const fingerprint = s => { let h1 = 0xdeadbeef ^ 7, h2 = 0x41c6ce57 ^ 7; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); };
-try { S.unlocked = sessionStorage.getItem('tdd-irl-unlock') === '1'; } catch (e) {}
-const setLock = open => { S.unlocked = open; S.draft.pw = ''; S.pwErr = '';
-  if (SUPA && !open) { S.admin = false; if (S.db) S.db.lock(); try { sessionStorage.removeItem('tdd-irl-pass'); } catch (e) {} }
-  try { open ? sessionStorage.setItem('tdd-irl-unlock', '1') : sessionStorage.removeItem('tdd-irl-unlock'); } catch (e) {} };
-
 /* ---------- data ---------- */
 const toMap = snap => { const m = {}; for (const d of snap.docs) m[d.id] = { ...d.data(), id: d.id }; return m; };
 const name = p => p ? (p.first + ' ' + p.last).trim() : 'Unknown';
@@ -296,13 +138,7 @@ const present = type => list(type).filter(p => p.checkedIn && !p.left && (type !
 const colorOf = p => COLORS[(p && p.color) || 0] || COLORS[0];
 const curRound = () => S.rounds['r' + S.ev.round] || null;
 const priorRounds = () => { const a = []; for (let i = 1; i <= S.ev.round; i++) if (S.rounds['r' + i]) a.push(S.rounds['r' + i]); return a; };
-const engineInput = () => ({ cands: present('candidate').map(p => ({ id: p.id })), reps: present('rep').map(p => ({ id: p.id, company: p.company })), priv: S.priv, cfg: S.cfg });
 async function save(fn) { try { await fn(); } catch (e) { S.toast = 'That did not save. ' + ((e && e.message) || 'Try again.'); render(); setTimeout(() => { S.toast = ''; render(); }, 5000); } }
-const setPerson = (id, patch) => save(() => S.db.doc('people/' + id).set(strip({ ...S.people[id], ...patch })));
-const setPriv = (id, patch) => save(() => S.db.doc('private/' + id).set(strip({ ...(S.priv[id] || {}), ...patch })));
-const strip = o => { const c = JSON.parse(JSON.stringify(o)); delete c.id; return c; };
-const setCfg = patch => save(() => S.db.doc('private/config').set(strip({ ...S.cfg, ...patch })));
-const setEv = patch => save(() => S.db.doc('state/event').set({ ...S.ev, ...patch }));
 
 async function boot() {
   render();
@@ -315,14 +151,12 @@ async function boot() {
   if (!SUPA) try { S.admin = !!(user && (await user.canEdit() || await user.isOwner())); } catch (e) {}
   const fail = () => { clearTimeout(slow); S.slow = true; requestRender(); };
   if (SUPA) {
-    S.unlocked = false; let saved = null; try { saved = sessionStorage.getItem('tdd-irl-pass'); } catch (e) {}
-    if (saved) try { await db.unlock(saved); S.admin = S.unlocked = true; } catch (e) {}
     db.start(() => { if (!S.ready) { S.slow = true; requestRender(); } });
   }
   db.collection('people').onSnapshot(s => { S.people = toMap(s); S.ready = true; S.slow = false; clearTimeout(slow); requestRender(); }, fail);
   db.collection('rounds').onSnapshot(s => { S.rounds = toMap(s); requestRender(); }, fail);
   db.doc('state/event').onSnapshot(d => { S.ev = { ...EV0, ...(d.exists ? d.data() : {}) }; requestRender(); }, fail);
-  if (S.admin || SUPA) {
+  if (TEAM && (S.admin || SUPA)) {
     db.collection('private').onSnapshot(s => { S.priv = toMap(s); S.cfg = { ...DEFAULT_CFG, ...(S.priv.config || {}) }; delete S.cfg.id; requestRender(); }, fail);
     db.collection('survey').onSnapshot(s => { S.survey = toMap(s); requestRender(); }, fail);
   }
@@ -337,6 +171,7 @@ document.addEventListener('input', e => { const k = e.target.dataset && e.target
 window.addEventListener('hashchange', () => { S.route = (location.hash || '').replace('#', ''); render(); });
 const dv = k => esc(S.draft[k] || '');
 S.route = (location.hash || '').replace('#', '');
+if (typeof window !== 'undefined' && window.TDD_BUILD === 'team' && !S.route) S.route = 'console';
 const route = () => S.route || '';
 // In-page navigation that does not depend on the address bar
 const nav = r => { S.route = r; try { location.hash = r; } catch (e) {} render(); try { window.scrollTo(0, 0); } catch (e) {} };
@@ -438,131 +273,7 @@ function stationCards(stations, editable) {
   }).join('') + '</div>';
 }
 
-/* ---------- team console ---------- */
-function viewConsole() {
-  let h = mark('Team console');
-  if (!SUPA && S.db && S.ready && !S.admin) return h + '<div class="card"><p>The team console is for The Dev Difference team. ' + link('', 'Go to the attendee page') + '</p></div>';
-  if (!S.unlocked) return '<div class="narrow stack">' + h + '<form class="card stack" data-form="unlock"><h2>Team console</h2><label>Password<input id="pw" type="password" data-draft="pw" value="' + dv('pw') + '" autocomplete="current-password"></label>'
-    + (S.pwErr ? '<p class="note">' + esc(S.pwErr) + '</p>' : '') + '<button class="primary big" type="submit">Open console</button><p class="small">' + link('', 'Go to the attendee page') + '</p></form></div>';
-  if (S.nodb || !S.ready) return h + waiting();
-  const c = present('candidate').length, r = present('rep').length, done = Object.keys(S.survey).length;
-  h += '<div class="stats"><div class="stat"><b>' + c + '</b><span class="small muted">of ' + list('candidate').length + ' candidates here</span></div>'
-    + '<div class="stat"><b>' + r + '</b><span class="small muted">of ' + list('rep').length + ' reps here</span></div>'
-    + '<div class="stat"><b>' + (S.ev.round || 0) + '</b><span class="small muted">rounds sent</span></div>'
-    + '<div class="stat"><b>' + done + '</b><span class="small muted">exit surveys in</span></div></div>';
-  h += '<div class="tabs">' + [['roster', 'Roster and check-in'], ['groups', 'Groups'], ['companies', 'Companies and prompts'], ['survey', 'Survey results']].map(t => '<button data-act="tab" data-id="' + t[0] + '" class="' + (S.ui.tab === t[0] ? 'on' : '') + '">' + t[1] + '</button>').join('')
-    + '' + link('screen', 'Room screen', 'chip') + '<button class="chip" data-act="tosurvey">Exit survey table (locks console)</button>' + link('', 'Attendee page', 'chip') + '<button class="chip" data-act="lock">Lock console</button></div>';
-  return h + ({ roster: tabRoster, groups: tabGroups, companies: tabCompanies, survey: tabSurvey }[S.ui.tab] || tabRoster)();
-}
-const companyOpts = sel => '<option value="">Choose company</option>' + S.cfg.companies.map(c => '<option' + (c.name === sel ? ' selected' : '') + '>' + esc(c.name) + '</option>').join('');
-const toggles = (act, id, options, on, extra) => '<div class="row">' + options.map(o => '<button class="chip' + (on.includes(o) ? ' on' : '') + '" data-act="' + act + '" data-id="' + id + '" data-v="' + esc(o) + '"' + (extra || '') + '>' + esc(o) + '</button>').join('') + '</div>';
-function tabRoster() {
-  const samples = Object.values(S.people).filter(p => p.sample).length;
-  let h = '<div class="card stack"><h2>Add a person</h2><form class="row" data-form="add">'
-    + '<label class="grow">First name<input id="add-first" data-draft="af" value="' + dv('af') + '"></label><label class="grow">Last name<input id="add-last" data-draft="al" value="' + dv('al') + '"></label>'
-    + '<label class="grow">Type<select id="add-type" data-draft="at"><option value="candidate"' + (S.draft.at === 'candidate' ? ' selected' : '') + '>Candidate</option><option value="rep"' + (S.draft.at === 'rep' ? ' selected' : '') + '>Company rep</option><option value="guest"' + (S.draft.at === 'guest' ? ' selected' : '') + '>Guest or team</option></select></label>'
-    + '<label class="grow">Company (reps only)<select id="add-company" data-draft="ac">' + companyOpts(S.draft.ac) + '</select></label><button class="primary" type="submit">Add</button></form>'
-    + '<details><summary class="small muted">Paste a list of candidates</summary><div class="stack" style="margin-top:10px"><p class="small muted">One per line: First Last, roles separated by semicolons, level. Example: Avery Cole, ML/AI; Software, strong</p><textarea id="bulk" data-draft="bulk">' + dv('bulk') + '</textarea><div><button data-act="bulk">Add these candidates</button></div></div></details>'
-    + '<div class="row">' + (Object.keys(S.people).length ? '' : '<button data-act="sample">Load sample people to test with</button>') + (samples ? '<button class="danger" data-act="unsample">Remove the ' + samples + ' sample people</button>' : '') + '</div></div>';
-  for (const [type, title] of [['rep', 'Company reps'], ['candidate', 'Candidates'], ['guest', 'Guests and team']]) {
-    const ps = list(type); if (!ps.length && type === 'guest') continue;
-    h += '<div class="card" style="margin-top:14px"><h2 style="margin-bottom:8px">' + title + '</h2>' + (ps.length ? ps.map(personRow).join('') : '<p class="muted small">None added yet.</p>') + '</div>';
-  }
-  return h;
-}
-function personRow(p) {
-  const pv = S.priv[p.id] || {}, col = colorOf(p);
-  let meta = '';
-  if (p.type === 'rep') meta = '<span class="dot" style="background:' + col[1] + '"></span> ' + esc(p.company || 'No company set') + ' · ' + col[0] + ' station';
-  if (p.type === 'candidate') meta = esc((pv.roles || []).join(', ') || 'No roles set') + (pv.level ? ' · ' + esc(pv.level[0].toUpperCase() + pv.level.slice(1)) : '');
-  let flags = '';
-  if (p.type === 'candidate') {
-    if (pv.status && pv.status !== 'approved') flags += ' <span class="pill warn">' + esc(pv.status) + '</span>';
-    if (pv.integrity === 'flagged') flags += ' <span class="pill bad">integrity flagged</span>'; else if (pv.integrity === 'needs review') flags += ' <span class="pill warn">integrity review</span>';
-    if ((pv.blocks || []).length) flags += ' <span class="pill">blocked: ' + esc(pv.blocks.join(', ')) + '</span>';
-  }
-  if (p.left) flags += ' <span class="pill">left</span>'; if (p.sample) flags += ' <span class="pill">sample</span>';
-  let h = '<div class="person"><button class="check' + (p.checkedIn ? ' on' : '') + '" data-act="checkin" data-id="' + p.id + '">' + (p.checkedIn ? 'Here' : 'Check in') + '</button>'
-    + '<div class="grow"><div><b>' + esc(name(p)) + '</b>' + flags + '</div><div class="small muted">' + meta + '</div></div><button class="ghost" data-act="open" data-id="' + p.id + '">' + (S.ui.open === p.id ? 'Close' : 'Edit') + '</button></div>';
-  if (S.ui.open !== p.id) return h;
-  h += '<div class="edit stack">';
-  if (p.type === 'rep') h += '<div class="row"><label class="grow">Company<select data-change="repco" data-id="' + p.id + '">' + companyOpts(p.company) + '</select></label>'
-    + '<label class="grow">Station color<select data-change="repcolor" data-id="' + p.id + '">' + COLORS.map((c, i) => '<option value="' + i + '"' + ((p.color || 0) === i ? ' selected' : '') + '>' + c[0] + '</option>').join('') + '</select></label></div>';
-  if (p.type === 'candidate') {
-    h += '<p class="small muted">Private to the team. None of this shows on phones or the room screen.</p>'
-      + '<div><h3>Roles</h3>' + toggles('role', p.id, ROLES, pv.roles || []) + '</div>'
-      + '<div><h3>Assessment level</h3>' + toggles('one', p.id, ['strong', 'good', 'weak'], [pv.level], ' data-k="level"') + '</div>'
-      + '<div><h3>Status</h3>' + toggles('one', p.id, ['approved', 'pending', 'in review'], [pv.status], ' data-k="status"') + '</div>'
-      + '<div><h3>Integrity check</h3>' + toggles('one', p.id, ['clear', 'needs review', 'flagged'], [pv.integrity], ' data-k="integrity"') + '</div>'
-      + '<div><h3>Never group with</h3>' + toggles('block', p.id, S.cfg.companies.map(c => c.name), pv.blocks || []) + '</div>'
-      + '<div class="row"><label class="grow">Raw score<input type="number" data-change="score" data-id="' + p.id + '" value="' + esc(pv.score == null ? '' : pv.score) + '"></label>'
-      + '<label class="grow">Start round 1 with<select data-change="seed" data-id="' + p.id + '"><option value="">Let the matching decide</option>' + list('rep').map(r => '<option value="' + r.id + '"' + (pv.seed === r.id ? ' selected' : '') + '>' + esc(name(r)) + ', ' + esc(r.company || '') + '</option>').join('') + '</select></label></div>';
-  }
-  return h + '<div class="row"><button data-act="left" data-id="' + p.id + '">' + (p.left ? 'Mark as back' : 'Mark as left early') + '</button><button class="danger" data-act="del" data-id="' + p.id + '">' + (S.ui.del === p.id ? 'Tap again to delete' : 'Delete') + '</button></div></div>';
-}
-function tabGroups() {
-  const n = S.ev.round + 1, cands = present('candidate'), reps = present('rep'), rd = curRound();
-  let h = '';
-  if (S.proposal) {
-    const P = S.proposal, notes = Engine.review({ ...engineInput(), stations: P.stations, prior: priorRounds() });
-    h += '<div class="card stack"><p class="eyebrow">Preview, not sent yet</p><h2>Round ' + n + ' groups</h2><p class="muted small">Tap a name, then tap a station to move that person. Nothing reaches phones until you send it.</p>'
-      + stationCards(P.stations, true)
-      + (P.unplaced.length ? '<div><h3>Not placed</h3>' + chips(P.unplaced) + '</div>' : '')
-      + (notes.length ? '<div class="stack"><h3>Worth a look</h3>' + notes.map(w => '<p class="note small">' + esc(name(S.people[w.cand || w.rep])) + ' ' + esc(w.text) + '</p>').join('') + '</div>' : '<p class="small muted">No rule breaks in this arrangement.</p>')
-      + '<div class="row"><button class="primary" data-act="publish">Send round ' + n + ' to phones</button><button data-act="build">Reshuffle</button><button class="ghost" data-act="discard">Discard</button></div></div>';
-  } else {
-    h += '<div class="card stack"><h2>Round ' + n + '</h2><p class="muted">' + cands.length + ' candidates and ' + reps.length + ' reps are checked in. Each rep is one station'
-      + (reps.length && cands.length ? ', so that is about ' + (Math.round(cands.length / reps.length * 10) / 10) + ' candidates per station.' : '.') + '</p>'
-      + '<button class="primary big" data-act="build"' + (cands.length && reps.length ? '' : ' disabled') + '>Show groups</button>'
-      + (cands.length && reps.length ? '' : '<p class="small muted">Check in at least one candidate and one rep with a company first.</p>') + '</div>';
-  }
-  if (rd) {
-    const placed = new Set(rd.stations.flatMap(s => s.cands)), late = cands.filter(p => !placed.has(p.id));
-    const lostReps = rd.stations.filter(s => !present('rep').some(r => r.id === s.rep));
-    h += '<div class="card stack" style="margin-top:14px"><div class="row" style="justify-content:space-between"><div><p class="eyebrow">Live on phones</p><h2>Round ' + rd.n + '</h2></div><div class="timer" data-timer></div></div>'
-      + stationCards(rd.stations, false)
-      + (late.length ? '<div class="stack"><h3>Checked in after this round was sent</h3>' + late.map(p => '<div class="row"><span class="grow">' + esc(name(p)) + '</span><button data-act="late" data-id="' + p.id + '">Add to best open station</button></div>').join('') + '</div>' : '')
-      + (lostReps.length ? '<p class="note small">' + lostReps.map(s => esc(name(S.people[s.rep]))).join(', ') + ' is no longer checked in. Build the next round to regroup around the reps who are here.</p>' : '')
-      + '<div class="row"><button data-act="timer">' + (S.ev.endsAt ? 'Restart' : 'Start') + ' the ' + S.cfg.minutes + ' minute timer</button>' + (S.ev.endsAt ? '<button data-act="stoptimer">Clear timer</button>' : '')
-      + '<button class="danger" data-act="undo">' + (S.ui.undo ? 'Tap again to take round ' + rd.n + ' off phones' : 'Undo round ' + rd.n) + '</button></div></div>';
-  }
-  h += '<div class="card row" style="margin-top:14px;justify-content:space-between"><div class="grow"><h3>Exit survey reminder</h3><p class="small muted">Shows a "stop at the exit table" card on every phone.</p></div><button data-act="surveyopen" class="' + (S.ev.surveyOpen ? 'primary' : '') + '">' + (S.ev.surveyOpen ? 'Showing. Tap to hide' : 'Show on phones') + '</button></div>';
-  return h;
-}
-function tabCompanies() {
-  let h = '<div class="card stack"><h2>Companies and what they are hiring for</h2><p class="small muted">Matching sends candidates to companies that want one of their roles. Changes save as you tap.</p>';
-  h += S.cfg.companies.map((c, i) => '<div class="edit stack"><div class="row" style="justify-content:space-between"><h3>' + esc(c.name) + '</h3><button class="ghost danger small" data-act="delco" data-id="' + i + '">Remove</button></div>' + toggles('want', i, ROLES, c.wants || []) + '</div>').join('');
-  h += '<form class="row" data-form="addco"><label class="grow">New company<input id="co-name" data-draft="co" value="' + dv('co') + '"></label><button type="submit">Add company</button></form></div>';
-  h += '<form class="card stack" style="margin-top:14px" data-form="prompts"><h2>Round settings</h2>'
-    + '<label>Minutes per round<input id="cfg-min" type="number" min="1" max="60" value="' + esc(S.draft.min || S.cfg.minutes) + '" data-draft="min"></label>'
-    + '<label>Round 1 icebreaker<textarea id="cfg-p1" data-draft="p1">' + esc(S.draft.p1 != null ? S.draft.p1 : S.cfg.prompts[0] || '') + '</textarea></label>'
-    + '<label>Round 2 icebreaker<textarea id="cfg-p2" data-draft="p2">' + esc(S.draft.p2 != null ? S.draft.p2 : S.cfg.prompts[1] || '') + '</textarea></label>'
-    + '<label>What candidates should walk away with<textarea id="cfg-gc" data-draft="gc">' + esc(S.draft.gc != null ? S.draft.gc : S.cfg.goalCand) + '</textarea></label>'
-    + '<label>What reps should walk away with<textarea id="cfg-gr" data-draft="gr">' + esc(S.draft.gr != null ? S.draft.gr : S.cfg.goalRep) + '</textarea></label>'
-    + '<div><button class="primary" type="submit">Save round settings</button></div></form>';
-  return h;
-}
-function tabSurvey() {
-  const sv = Object.values(S.survey), ratings = sv.map(s => s.rating).filter(Boolean);
-  let h = '<div class="card stack"><h2>Who wants to keep talking</h2><p class="small muted">' + sv.length + ' surveys in' + (ratings.length ? ' · average event rating ' + (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1) + ' of 5' : '') + '. Picks are ranked, with #1 as the top choice. A candidate shows under a company when one of its reps picked them.</p>';
-  if (!sv.length) return h + '<p class="muted">No surveys yet. Open the exit survey table view on a tablet by the door.</p></div>';
-  for (const co of S.cfg.companies) {
-    const picks = {};
-    for (const s of sv) { const rep = S.people[s.id]; if (rep && rep.type === 'rep' && rep.company === co.name) (s.picks || []).forEach((c, i) => (picks[c] = picks[c] || []).push({ who: rep.first, rank: i + 1 })); }
-    const candRank = {}; for (const s of sv) if (S.people[s.id] && S.people[s.id].type === 'candidate' && (s.picks || []).includes(co.name)) candRank[s.id] = s.picks.indexOf(co.name) + 1;
-    const wantsCo = Object.keys(candRank), best = c => Math.min(...picks[c].map(x => x.rank));
-    h += '<div class="edit stack"><h3>' + esc(co.name) + '</h3>' + (Object.keys(picks).length ? Object.keys(picks).sort((x, y) => best(x) - best(y)).map(c => '<div class="row"><span class="grow"><b>' + esc(name(S.people[c])) + '</b> <span class="small muted">' + esc(picks[c].map(x => x.who + '\'s #' + x.rank).join(', ')) + '</span></span>' + (wantsCo.includes(c) ? '<span class="pill ok">mutual, ranked this company #' + candRank[c] + '</span>' : '<span class="pill">company only</span>') + '</div>').join('') : '<p class="small muted">No picks from this company yet.</p>');
-    const only = wantsCo.filter(c => !picks[c]);
-    if (only.length) h += '<p class="small muted">Interested candidates the company did not pick: ' + esc(only.map(c => name(S.people[c]) + ' (their #' + candRank[c] + ')').join(', ')) + '</p>';
-    h += '</div>';
-  }
-  for (const [k, title] of [['thoughts', 'What they thought of the event'], ['comment', 'Anything else they shared']]) {
-    const notes = sv.filter(s => s[k]);
-    if (notes.length) h += '<div class="stack"><h3>' + title + '</h3>' + notes.map(s => '<p class="note small"><b>' + esc(name(S.people[s.id])) + ':</b> ' + esc(s[k]) + '</p>').join('') + '</div>';
-  }
-  return h + '</div>';
-}
-
+function viewConsole() { return viewAttendee(); }
 /* ---------- exit survey table (runs on a team device) ---------- */
 function viewKiosk() {
   let h = '<div class="narrow stack">' + mark('Exit survey');
@@ -593,94 +304,19 @@ function viewKiosk() {
 }
 
 /* ---------- actions ---------- */
-const nextColor = () => { const used = list('rep').map(r => r.color || 0); for (let i = 0; i < COLORS.length; i++) if (!used.includes(i)) return i; return list('rep').length % COLORS.length; };
-async function addPerson(first, last, type, company, pv, extra) {
-  const ref = S.db.collection('people').doc();
-  const p = { first, last, type, checkedIn: false, ...(extra || {}) };
-  if (type === 'rep') { p.company = company || ''; p.color = nextColor(); }
-  S.people[ref.id] = { ...p, id: ref.id };
-  await ref.set(p);
-  if (pv) await S.db.doc('private/' + ref.id).set(pv);
-  return ref.id;
-}
-const SAMPLE = [['Avery', 'Cole', ['ML/AI'], 'strong'], ['Blake', 'Ito', ['ML/AI'], 'good'], ['Casey', 'Okafor', ['Full-stack'], 'strong'], ['Devon', 'Park', ['Full-stack'], 'good'], ['Emery', 'Shah', ['Software'], 'strong'], ['Finley', 'Ross', ['Founding', 'Software'], 'good'], ['Gray', 'Nunez', ['Forward deployed'], 'strong'], ['Harper', 'Lin', ['Security'], 'good'], ['Indra', 'Moss', ['Full-stack'], 'weak'], ['Jules', 'Abara', ['Software'], 'good'], ['Kai', 'Brandt', ['QA'], 'good']];
-const act = {
-  tab: d => { S.ui.tab = d.id; render(); },
-  lock: () => { setLock(false); render(); },
-  tosurvey: () => { setLock(false); S.kioskOk = true; nav('survey'); },
-  nav: d => nav(d.id || ''),
+const act = Object.assign({
   notme: () => { S.me = null; try { localStorage.removeItem('tdd-irl-me'); } catch (e) {} render(); },
-  open: d => { S.ui.open = S.ui.open === d.id ? null : d.id; S.ui.del = null; render(); },
-  checkin: d => { const p = S.people[d.id]; setPerson(d.id, p.checkedIn ? { checkedIn: false, at: null } : { checkedIn: true, left: false, at: new Date().toISOString() }); },
-  left: d => setPerson(d.id, { left: !S.people[d.id].left }),
-  del: d => { if (S.ui.del !== d.id) { S.ui.del = d.id; return render(); } S.ui.del = S.ui.open = null; save(async () => { await S.db.doc('people/' + d.id).delete(); await S.db.doc('private/' + d.id).delete(); }); },
-  role: d => { const cur = (S.priv[d.id] || {}).roles || []; setPriv(d.id, { roles: cur.includes(d.v) ? cur.filter(x => x !== d.v) : [...cur, d.v] }); },
-  block: d => { const cur = (S.priv[d.id] || {}).blocks || []; setPriv(d.id, { blocks: cur.includes(d.v) ? cur.filter(x => x !== d.v) : [...cur, d.v] }); },
-  one: d => setPriv(d.id, { [d.k]: (S.priv[d.id] || {})[d.k] === d.v ? null : d.v }),
-  want: d => { const cs = JSON.parse(JSON.stringify(S.cfg.companies)), c = cs[+d.id]; c.wants = (c.wants || []).includes(d.v) ? c.wants.filter(x => x !== d.v) : [...(c.wants || []), d.v]; setCfg({ companies: cs }); },
-  delco: d => setCfg({ companies: S.cfg.companies.filter((c, i) => i !== +d.id) }),
-  sample: () => save(async () => {
-    const repNames = [['Noor', 'Reyes'], ['Nico', 'Hale'], ['Cam', 'Ortiz'], ['Cleo', 'Vance'], ['Kit', 'Larsen'], ['Remy', 'Stone'], ['Sol', 'Adair'], ['Tate', 'Quinn']]; let k = 0;
-    for (const co of S.cfg.companies) for (const i of (co.name === 'CareLumi' ? [1] : [1, 2])) { const nm = repNames[k++ % repNames.length]; await addPerson(nm[0], nm[1], 'rep', co.name, null, { sample: true }); }
-    for (const s of SAMPLE) await addPerson(s[0], s[1], 'candidate', '', { roles: s[2], level: s[3], status: 'approved', integrity: 'clear' }, { sample: true });
-  }),
-  unsample: () => save(async () => { for (const p of Object.values(S.people).filter(p => p.sample)) { await S.db.doc('people/' + p.id).delete(); await S.db.doc('private/' + p.id).delete(); } }),
-  bulk: () => save(async () => {
-    for (const line of (S.draft.bulk || '').split('\n').map(l => l.trim()).filter(Boolean)) {
-      const parts = line.split(',').map(x => x.trim()), nm = parts[0].split(/\s+/);
-      if (nm.length < 2) continue;
-      const roles = (parts[1] || '').split(';').map(x => x.trim()).map(x => ROLES.find(r => r.toLowerCase() === x.toLowerCase())).filter(Boolean);
-      const level = ['strong', 'good', 'weak'].includes((parts[2] || '').toLowerCase()) ? parts[2].toLowerCase() : null;
-      await addPerson(nm[0], nm.slice(1).join(' '), 'candidate', '', { roles, level, status: 'approved' });
-    }
-    S.draft.bulk = ''; render();
-  }),
-  build: () => { S.shuffle = (S.shuffle || 0) + 1; S.sel = null; S.proposal = Engine.buildGroups({ ...engineInput(), prior: priorRounds(), seedNum: S.ev.round * 100 + S.shuffle }); render(); },
-  discard: () => { S.proposal = null; S.sel = null; render(); },
-  pick: d => { S.sel = S.sel === d.id ? null : d.id; render(); },
-  moveto: d => { for (const s of S.proposal.stations) s.cands = s.cands.filter(c => c !== S.sel); S.proposal.stations.find(s => s.rep === d.id).cands.push(S.sel); S.proposal.unplaced = S.proposal.unplaced.filter(c => c !== S.sel); S.sel = null; render(); },
-  publish: () => save(async () => {
-    const n = S.ev.round + 1, P = S.proposal;
-    await S.db.doc('rounds/r' + n).set({ n, at: new Date().toISOString(), prompt: S.cfg.prompts[(n - 1) % S.cfg.prompts.length] || '', goalCand: S.cfg.goalCand, goalRep: S.cfg.goalRep, stations: P.stations.map(s => ({ rep: s.rep, cands: s.cands })) });
-    await S.db.doc('state/event').set({ ...S.ev, round: n, endsAt: null });
-    S.proposal = null; S.sel = null; S.shuffle = 0; render();
-  }),
-  late: d => { const rd = curRound(), rep = Engine.placeLate({ ...engineInput(), stations: rd.stations, prior: priorRounds().filter(r => r.n !== rd.n) }, d.id);
-    if (!rep) { S.toast = 'No open station fits this person. Add them by hand in the next round.'; return render(); }
-    save(() => S.db.doc('rounds/r' + rd.n).set(strip({ ...rd, stations: rd.stations.map(s => s.rep === rep ? { rep: s.rep, cands: [...s.cands, d.id] } : s) }))); },
-  timer: () => setEv({ endsAt: new Date(Date.now() + S.cfg.minutes * 60000).toISOString() }),
-  stoptimer: () => setEv({ endsAt: null }),
-  undo: () => { if (!S.ui.undo) { S.ui.undo = true; return render(); } S.ui.undo = false; const n = S.ev.round; save(async () => { await S.db.doc('state/event').set({ ...S.ev, round: n - 1, endsAt: null }); await S.db.doc('rounds/r' + n).delete(); }); },
-  surveyopen: () => setEv({ surveyOpen: !S.ev.surveyOpen }),
-  kwho: d => { S.kiosk = { who: d.id, picks: [], none: false, rating: 0 }; S.draft.kc = S.draft.ko = ''; render(); },
+  nav: d => nav(d.id || ''),
   kpick: d => { const K = S.kiosk; K.none = false; K.picks = K.picks.includes(d.id) ? K.picks.filter(x => x !== d.id) : [...K.picks, d.id]; render(); },
   knone: () => { S.kiosk.none = !S.kiosk.none; S.kiosk.picks = []; render(); },
   krate: d => { S.kiosk.rating = +d.id; render(); },
   knext: () => { const back = !S.admin && !S.kioskOk; S.kiosk = null; back ? nav('') : render(); },
   ksend: () => save(async () => { const K = S.kiosk; await S.db.doc('survey/' + K.who).set({ type: S.people[K.who].type, picks: K.picks, none: K.none, rating: K.rating || null, thoughts: (S.draft.kc || '').trim(), comment: (S.draft.ko || '').trim(), at: new Date().toISOString() }); if (K.who === S.me) { S.surveyDone = true; try { localStorage.setItem('tdd-irl-survey', '1'); } catch (e) {} } S.kiosk = { done: true }; S.draft.kc = S.draft.ko = ''; render(); })
-};
+}, typeof teamAct !== 'undefined' ? teamAct : {});
 document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b || b.disabled) return; const f = act[b.dataset.act]; if (f) f(b.dataset); });
-document.addEventListener('change', e => {
-  const d = e.target.dataset; if (!d || !d.change) return; const v = e.target.value;
-  if (d.change === 'repco') setPerson(d.id, { company: v });
-  if (d.change === 'repcolor') setPerson(d.id, { color: +v });
-  if (d.change === 'score') setPriv(d.id, { score: v === '' ? null : +v });
-  if (d.change === 'seed') setPriv(d.id, { seed: v || null });
-});
 document.addEventListener('submit', e => {
   e.preventDefault(); const f = e.target.dataset.form;
   if (f === 'find') findMe();
-  if (f === 'unlock') {
-    const pw = (S.draft.pw || '').trim(); if (document.activeElement) document.activeElement.blur();
-    if (!SUPA) { if (fingerprint(pw) === PASS_MARK) setLock(true); else { S.pwErr = 'That password is not right. Try again.'; S.draft.pw = ''; } return render(); }
-    S.db.unlock(pw).then(() => { setLock(true); S.admin = true; try { sessionStorage.setItem('tdd-irl-pass', pw); } catch (e) {} render(); })
-      .catch(e => { S.pwErr = e && e.status && e.status !== 403 && e.status !== 401 && !/wrong password/.test(e.message) ? 'Could not reach the event data. Check the connection and try again.' : 'That password is not right. Try again.'; S.draft.pw = ''; render(); });
-  }
-  if (f === 'add') { const first = (S.draft.af || '').trim(), last = (S.draft.al || '').trim(), type = S.draft.at || 'candidate';
-    if (!first || !last) { S.toast = 'Enter a first and last name.'; render(); return setTimeout(() => { S.toast = ''; render(); }, 3000); }
-    S.draft.af = S.draft.al = ''; save(() => addPerson(first, last, type, S.draft.ac || '', type === 'candidate' ? { status: 'approved' } : null)); if (document.activeElement) document.activeElement.blur(); render(); }
-  if (f === 'addco') { const n = (S.draft.co || '').trim(); if (n && !S.cfg.companies.some(c => c.name === n)) { S.draft.co = ''; setCfg({ companies: [...S.cfg.companies, { name: n, wants: [] }] }); if (document.activeElement) document.activeElement.blur(); } }
-  if (f === 'prompts') { const g = (k, fb) => (S.draft[k] != null ? S.draft[k] : fb); setCfg({ minutes: Math.max(1, +g('min', S.cfg.minutes) || 17), prompts: [g('p1', S.cfg.prompts[0]), g('p2', S.cfg.prompts[1])], goalCand: g('gc', S.cfg.goalCand), goalRep: g('gr', S.cfg.goalRep) }); if (document.activeElement) document.activeElement.blur(); }
 });
 boot();
 </script>
