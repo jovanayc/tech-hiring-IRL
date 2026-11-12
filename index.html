@@ -76,7 +76,7 @@ function makeSupaDb(cfg) {
   const H = { apikey: cfg.key, Authorization: 'Bearer ' + cfg.key, 'Content-Type': 'application/json' };
   const cache = new Map(), subs = [];
   let pass = null, loaded = false, queue = Promise.resolve(), onError = null, holdUntil = 0;
-  const isPrivate = p => p.startsWith('private/') || p.startsWith('survey/');
+  const isPrivate = p => p.startsWith('private/') || p.startsWith('survey/') || p.startsWith('notes/');
   async function call(path, opt) {
     const r = await fetch(base + path, { headers: H, ...opt });
     if (!r.ok) { let m = ''; try { m = (await r.json()).message || ''; } catch (e) {} const err = new Error(m || 'Request failed (' + r.status + ')'); err.status = r.status; throw err; }
@@ -105,6 +105,7 @@ function makeSupaDb(cfg) {
     const run = async () => {
       try {
         if (ops.length === 1 && ops[0].path.startsWith('survey/') && ops[0].op === 'set') await rpc('submit_survey', { person: ops[0].path.slice(7), payload: ops[0].data });
+        else if (ops.length === 1 && ops[0].path.startsWith('notes/') && ops[0].op === 'set') await rpc('submit_note', { person: ops[0].path.slice(6), payload: ops[0].data });
         else { if (!pass) throw new Error('Open the team console with the password first.'); await rpc('team_write', { pass, ops }); }
       } finally { holdUntil = 0; }
     };
@@ -131,7 +132,7 @@ const DEFAULT_CFG = { minutes: 17, companies: [], prompts: [] };
 const SUPA = (typeof window !== 'undefined' && window.TDD_SUPABASE) || null;  // set on the no-login build
 const TEAM = !(typeof window !== 'undefined' && window.TDD_BUILD === 'public');  // the public page ships without the console
 const EV0 = { round: 0, endsAt: null, surveyOpen: false };
-const S = { ready: false, admin: false, people: {}, priv: {}, rounds: {}, ev: { ...EV0 }, survey: {}, cfg: DEFAULT_CFG, me: null, draft: {}, ui: { tab: 'roster', open: null }, proposal: null, sel: null, kiosk: null, toast: '' };
+const S = { ready: false, admin: false, people: {}, priv: {}, rounds: {}, ev: { ...EV0 }, survey: {}, notes: {}, cfg: DEFAULT_CFG, me: null, draft: {}, ui: { tab: 'roster', open: null }, proposal: null, sel: null, kiosk: null, toast: '' };
 try { S.me = localStorage.getItem('tdd-irl-me'); S.surveyDone = localStorage.getItem('tdd-irl-survey') === '1'; } catch (e) {}
 /* ---------- data ---------- */
 const toMap = snap => { const m = {}; for (const d of snap.docs) m[d.id] = { ...d.data(), id: d.id }; return m; };
@@ -163,6 +164,7 @@ async function boot() {
   if (TEAM && (S.admin || SUPA)) {
     db.collection('private').onSnapshot(s => { S.priv = toMap(s); S.cfg = { ...DEFAULT_CFG, ...(S.priv.config || {}) }; delete S.cfg.id; requestRender(); }, fail);
     db.collection('survey').onSnapshot(s => { S.survey = toMap(s); requestRender(); }, fail);
+    if (SUPA) db.collection('notes').onSnapshot(s => { S.notes = toMap(s); requestRender(); }, fail);
   }
   render();
 }
@@ -251,8 +253,40 @@ function goCard(me, rd, st) {
   h += '<div class="card stack"><p class="eyebrow blue">Icebreaker</p><h2>' + esc(rd.prompt || '') + '</h2><p class="muted">Everyone answers, about two minutes in total.</p></div>';
   const goal = String((isRep ? rd.goalRep : rd.goalCand) || '').trim(), rest = goal.replace(/^leave knowing\s+/i, '');
   if (goal) h += '<div class="card stack"><p class="eyebrow">Leave knowing</p><p>' + esc(rest.charAt(0).toUpperCase() + rest.slice(1)) + '</p></div>';
-  return h;
+  return h + notesCard(me, rd, st);
 }
+/* ---------- attendee notes: kept on the phone, saved for the team, emailed back on request ---------- */
+const notesKey = id => 'tdd-irl-notes-' + id;
+function myNotes(id) { if (!S.myNotes || S.myNotesFor !== id) { S.myNotesFor = id; try { S.myNotes = JSON.parse(localStorage.getItem(notesKey(id)) || '{}'); } catch (e) { S.myNotes = {}; } if (!S.myNotes.rounds) S.myNotes = { rounds: {}, email: '', sendRequested: false }; } return S.myNotes; }
+const keepNotes = id => { try { localStorage.setItem(notesKey(id), JSON.stringify(myNotes(id))); } catch (e) {} };
+const roundLabel = (me, st) => { const rep = S.people[st.rep]; return me.id === st.rep ? 'my group: ' + st.cands.map(id => name(S.people[id])).join(', ') : (rep ? rep.company + ' with ' + name(rep) : ''); };
+const notesText = id => { const r = myNotes(id).rounds; return Object.keys(r).sort().filter(k => (r[k].text || '').trim()).map(k => 'Round ' + k + (r[k].with ? ' (' + r[k].with + ')' : '') + '\n' + r[k].text.trim()).join('\n\n'); };
+const NOTE_HINT = 'Your notes save as you type and are shared with The Dev Difference team. Press Send and we will email them to you after the event.';
+const sayNote = msg => { S.noteStatus = msg; const el = document.getElementById('note-status'); if (el) el.textContent = msg; };
+function pushNotes() {
+  const me = S.people[S.me], m = myNotes(S.me); if (!me || !S.db) return Promise.reject(new Error('offline'));
+  return S.db.doc('notes/' + me.id).set({ name: name(me), type: me.type, rounds: JSON.parse(JSON.stringify(m.rounds)), email: m.email || '', sendRequested: !!m.sendRequested, at: new Date().toISOString() });
+}
+function notesCard(me, rd, st) {
+  if (!SUPA) return '';
+  const m = myNotes(me.id), cur = m.rounds[rd.n] || {}, earlier = Object.keys(m.rounds).filter(k => +k !== rd.n && (m.rounds[k].text || '').trim()).sort();
+  return '<div class="card stack"><p class="eyebrow">Your notes</p><label>Round ' + rd.n + ': ' + esc(roundLabel(me, st)) + '<textarea id="note-box" data-note="' + rd.n + '" data-with="' + esc(roundLabel(me, st)) + '" placeholder="Who stood out, what you want to follow up on, anything to remember.">' + esc(cur.text || '') + '</textarea></label>'
+    + earlier.map(k => '<p class="note small"><b>Round ' + k + (m.rounds[k].with ? ', ' + esc(m.rounds[k].with) : '') + ':</b> ' + esc(m.rounds[k].text) + '</p>').join('')
+    + '<label>Email my notes to<input id="note-email" type="email" inputmode="email" autocomplete="email" data-note-email="1" placeholder="you@example.com" value="' + esc(m.email || '') + '"></label>'
+    + '<button class="primary big" data-act="sendnotes">' + (m.sendRequested ? 'Send again with my latest notes' : 'Send my notes to my email') + '</button>'
+    + '<p class="small muted" id="note-status">' + esc(S.noteStatus || (m.sendRequested ? 'Got it. We will email your notes to ' + m.email + ' after the event.' : NOTE_HINT)) + '</p>'
+    + '<div class="row"><button class="ghost" data-act="mailnotes">Open in my mail app now</button><button class="ghost" data-act="copynotes">Copy my notes</button></div></div>';
+}
+let noteTimer = null;
+document.addEventListener('input', e => {
+  const t = e.target; if (!t.dataset || !S.me) return;
+  const m = myNotes(S.me);
+  if (t.dataset.note) m.rounds[t.dataset.note] = { text: t.value.slice(0, 4000), with: t.dataset.with || '' };
+  else if (t.dataset.noteEmail) m.email = t.value.trim().slice(0, 200);
+  else return;
+  keepNotes(S.me);
+  clearTimeout(noteTimer); noteTimer = setTimeout(() => { pushNotes().then(() => sayNote(myNotes(S.me).sendRequested ? 'Saved. We will email your latest notes to ' + myNotes(S.me).email + ' after the event.' : 'Saved. ' + NOTE_HINT), () => sayNote('Saved on this phone. We could not reach the event server just now and will try again when you type.')); }, 1200);
+});
 function findMe() {
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[^a-z]/g, '');
   const f = norm(S.draft.ff), l = norm(S.draft.fl);
@@ -320,7 +354,18 @@ function viewKiosk() {
 }
 
 /* ---------- actions ---------- */
-const act = Object.assign({
+const noteActions = {
+  sendnotes: () => {
+    const m = myNotes(S.me), box = document.getElementById('note-email'); if (box) m.email = box.value.trim();
+    if (!notesText(S.me)) { S.noteStatus = 'Type a note first, then press Send.'; return render(); }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m.email || '')) { S.noteStatus = 'Enter the email address you want your notes sent to.'; return render(); }
+    m.sendRequested = true; keepNotes(S.me); clearTimeout(noteTimer); S.noteStatus = 'Sending...'; render();
+    pushNotes().then(() => { S.noteStatus = 'Got it. We will email your notes to ' + m.email + ' after the event.'; render(); }, () => { m.sendRequested = false; keepNotes(S.me); S.noteStatus = 'That did not go through. Check your connection and press Send again. Your notes are still on this phone.'; render(); });
+  },
+  mailnotes: () => { const body = notesText(S.me), m = myNotes(S.me); if (!body) { S.noteStatus = 'Type a note first.'; return render(); } location.href = 'mailto:' + encodeURIComponent(m.email || '') + '?subject=' + encodeURIComponent('My Tech Hiring IRL notes') + '&body=' + encodeURIComponent(body + '\n\nFrom Tech Hiring IRL, hosted by The Dev Difference'); },
+  copynotes: () => { const body = notesText(S.me); const done = ok => { S.noteStatus = ok ? 'Copied. Paste your notes anywhere.' : 'Copying is blocked on this phone. Use Send or your mail app.'; render(); }; if (!body) { S.noteStatus = 'Type a note first.'; return render(); } try { navigator.clipboard.writeText(body).then(() => done(true), () => done(false)); } catch (e) { done(false); } }
+};
+const act = Object.assign({}, noteActions, {
   notme: () => { S.me = null; try { localStorage.removeItem('tdd-irl-me'); } catch (e) {} render(); },
   nav: d => nav(d.id || ''),
   kpick: d => { const K = S.kiosk; K.none = false; K.picks = K.picks.includes(d.id) ? K.picks.filter(x => x !== d.id) : [...K.picks, d.id]; render(); },
