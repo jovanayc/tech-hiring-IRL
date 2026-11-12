@@ -41,7 +41,7 @@ button.chip.on{background:var(--accent);border-color:var(--accent);color:#140700
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
 .stat b{font-family:var(--display);font-size:20px;font-variant-numeric:tabular-nums;display:block;line-height:1.1}
 .person{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)} .person:first-child{border-top:0}
-.check{width:88px;flex:none} .check.on{background:var(--ok);border-color:var(--ok);color:#06140d}
+.check{width:100px;flex:none;white-space:nowrap} .check.on{background:var(--ok);border-color:var(--ok);color:#06140d}
 .edit{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px;margin:4px 0 12px}
 .stations{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
 .station{background:var(--surface);border:1px solid var(--line);border-top:6px solid var(--c,#666);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
@@ -61,6 +61,7 @@ button.rank{display:flex;align-items:center;gap:10px;text-align:left} .rank .num
 .profgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
 .eyebrow.blue{color:#4da3ff} a.chip{text-decoration:none;border-color:#4da3ff;color:var(--text)} a.plink{color:var(--text);text-decoration:underline;text-decoration-color:#4da3ff;text-underline-offset:3px}
 .li{display:inline-block;font-family:var(--body);font-size:10px;font-weight:700;letter-spacing:.02em;color:#06121f;background:#4da3ff;border-radius:4px;padding:1px 6px;margin-left:7px;vertical-align:middle;text-decoration:none}
+@media (pointer:coarse){button,a.chip,.chip[data-act],select,input{min-height:42px} .chip{padding:8px 12px} .stars button{width:46px;height:46px}}
 </style>
 </head>
 <body>
