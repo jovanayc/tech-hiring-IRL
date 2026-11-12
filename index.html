@@ -142,7 +142,8 @@ function makeSupaDb(cfg) {
     onSnapshot: fn => { const s = { path, fn, col: true, sig: null }; subs.push(s); if (loaded) { s.sig = sig(s); fn(colSnap(path)); } return () => subs.splice(subs.indexOf(s), 1); } });
   return { doc, collection, start: errFn => { onError = errFn; loop(); },
     unlock: async p => { const rows = await rpc('team_read', { pass: p }); pass = p; merge(rows, true); notify(); },
-    lock: () => { pass = null; } };
+    lock: () => { pass = null; },
+    checkEmail: (person, email) => rpc('check_email', { person, email }) };
 }
 </script>
 <script>
@@ -242,10 +243,11 @@ function viewAttendee() {
     : '<div class="card"><p class="eyebrow">Up next</p><h2>Groups have not started yet</h2><p class="muted">This page updates on its own when round 1 begins.</p></div>';
   h += status;
   if (!me) {
-    h += '<div class="stack"><h2>Enter your name to see your station</h2></div>'
+    h += '<div class="stack"><h2>' + (SUPA ? 'Sign in to see your station' : 'Enter your name to see your station') + '</h2></div>'
       + '<form class="card stack" data-form="find"><label>First name<input id="find-first" data-draft="ff" value="' + dv('ff') + '" autocomplete="given-name"></label>'
       + '<label>Last name<input id="find-last" data-draft="fl" value="' + dv('fl') + '" autocomplete="family-name"></label>'
-      + (S.findErr ? '<p class="note">' + esc(S.findErr) + '</p>' : '') + '<button class="primary big" type="submit">Find me</button></form>';
+      + (SUPA ? '<label>Email<input id="find-email" type="email" inputmode="email" autocomplete="email" data-draft="fe" value="' + dv('fe') + '"></label><p class="small muted">Use the same email your confirmation for this event was sent to.</p>' : '')
+      + (S.findErr ? '<p class="note">' + esc(S.findErr) + '</p>' : '') + '<button class="primary big" type="submit"' + (S.finding ? ' disabled' : '') + '>' + (S.finding ? 'Checking...' : 'Find me') + '</button></form>';
   } else {
     h += '<div class="row" style="justify-content:space-between"><h1>Hi, ' + esc(me.first) + '</h1><button class="ghost small" data-act="notme">Not you?</button></div>';
     const rd = curRound(), st = rd && rd.stations.find(s => s.rep === me.id || s.cands.includes(me.id));
@@ -299,7 +301,8 @@ const NOTE_HINT = 'Saves automatically. You\'ll get an email after the event wit
 const sayNote = msg => { S.noteStatus = msg; const el = document.getElementById('note-status'); if (el) el.textContent = msg; };
 function pushNotes() {
   const me = S.people[S.me], m = myNotes(S.me); if (!me || !S.db) return Promise.reject(new Error('offline'));
-  return S.db.doc('notes/' + me.id).set({ name: name(me), type: me.type, text: m.text || '', at: new Date().toISOString() });
+  let email = ''; try { email = localStorage.getItem('tdd-irl-email') || ''; } catch (e) {}
+  return S.db.doc('notes/' + me.id).set({ name: name(me), type: me.type, text: m.text || '', email, at: new Date().toISOString() });
 }
 let notesOpen = true; try { notesOpen = localStorage.getItem('tdd-irl-notes-open') !== '0'; } catch (e) {}
 function notesCard(me) {
@@ -319,14 +322,23 @@ document.addEventListener('input', e => {
 function findMe() {
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[^a-z]/g, '');
   const f = norm(S.draft.ff), l = norm(S.draft.fl);
+  const email = (S.draft.fe || '').trim().toLowerCase();
   if (!f || !l) { S.findErr = 'Enter your first and last name.'; return render(); }
+  if (SUPA && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { S.findErr = 'Enter your email address. Use the one your confirmation for this event was sent to.'; return render(); }
   const all = Object.values(S.people);
   let hits = all.filter(p => norm(p.first) === f && norm(p.last) === l);
   if (!hits.length) hits = all.filter(p => norm(p.last) === l && (norm(p.first).startsWith(f) || f.startsWith(norm(p.first))));
   // long or shortened last names: match any one word of it, then fall back to a first name only one person has
   if (!hits.length) hits = all.filter(p => norm(p.first) === f && String(p.last || '').split(/[\s-]+/).some(w => norm(w) === l));
   if (!hits.length) { const byFirst = all.filter(p => norm(p.first) === f); if (byFirst.length === 1) hits = byFirst; }
-  if (hits.length === 1) { S.me = hits[0].id; S.findErr = ''; try { localStorage.setItem('tdd-irl-me', S.me); } catch (e) {} }
+  const signIn = id => { S.me = id; S.findErr = ''; try { localStorage.setItem('tdd-irl-me', S.me); if (email) localStorage.setItem('tdd-irl-email', email); } catch (e) {} };
+  if (hits.length === 1 && SUPA) {
+    // The email is checked by the database, so nobody's email is ever sent to phones
+    S.finding = true; S.findErr = ''; render();
+    return S.db.checkEmail(hits[0].id, email).then(r => { S.finding = false; if (r === 'ok' || r === 'saved') signIn(hits[0].id); else S.findErr = 'That email does not match your registration. Use the email your confirmation was sent to, or see the check-in desk.'; render(); },
+      e => { S.finding = false; if (e && e.status === 404) signIn(hits[0].id); else S.findErr = 'We could not check that just now. Check your connection and try again, or see the check-in desk.'; render(); });
+  }
+  if (hits.length === 1) signIn(hits[0].id);
   else S.findErr = hits.length ? 'More than one person matches that name. Please see the check-in desk.' : 'We couldn\'t find that name. Check the spelling, or see the check-in desk.';
   render();
 }
