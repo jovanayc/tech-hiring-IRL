@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tech Hiring IRL Live</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=DM+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{ /* layout: one dark column for phones, a wide grid for the console and room screen */
   --bg:#0a0a0a; --surface:#151413; --raised:#1e1c1a; --line:#2e2b27; --text:#f3efe7; --muted:#a8a196; --accent:#ff6a1a;
@@ -63,6 +63,19 @@ button.rank{display:flex;align-items:center;gap:10px;text-align:left} .rank .num
 .li{display:inline-block;font-family:var(--body);font-size:10px;font-weight:700;letter-spacing:.02em;color:#06121f;background:#4da3ff;border-radius:4px;padding:1px 6px;margin-left:7px;vertical-align:middle;text-decoration:none}
 @media (pointer:coarse){button,a.chip,.chip[data-act],select,input{min-height:42px} .chip{padding:8px 12px} .stars button{width:46px;height:46px}}
 table.rt{width:100%;border-collapse:collapse;font-size:14px} table.rt th{text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)} table.rt td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top} table.rt tr:last-child td{border-bottom:0} table.rt td:first-child{white-space:nowrap}
+.screen2{position:fixed;inset:0;z-index:5;background:#0b0b0b;color:#f6f2ea;font-family:"DM Sans","Helvetica Neue",Arial,sans-serif;padding:5.2vh 5.4vw 5vh;display:flex;flex-direction:column;overflow:hidden;--so:#ee9130}
+.screen2 .shead{display:flex;justify-content:space-between;align-items:flex-start;gap:4vw}
+.screen2 .sround{font-size:clamp(34px,5.6vw,120px);font-weight:700;line-height:1;letter-spacing:.02em;text-transform:uppercase;color:var(--so)}
+.screen2 .stimer{font-size:clamp(40px,7.2vw,150px);font-weight:700;line-height:.95;color:var(--so);font-variant-numeric:tabular-nums;text-transform:uppercase;white-space:nowrap}
+.screen2 .sbody{margin-top:9vh;display:flex;flex-direction:column}
+.screen2 .seyebrow{font-size:clamp(13px,1.55vw,32px);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--so);margin:0 0 4.2vh}
+.screen2 .sq{font-family:inherit;font-size:clamp(28px,4.5vw,96px);font-weight:700;line-height:1.55;letter-spacing:-.005em;margin:0;max-width:90vw;text-wrap:balance}
+.screen2 .sguide{font-size:clamp(13px,1.5vw,30px);font-weight:700;letter-spacing:.13em;color:var(--so);margin:6.5vh 0 0}
+.screen2 .slist{margin:3.4vh 0 0;padding:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:1.5vh}
+.screen2 .slist li{counter-increment:s;font-size:clamp(13px,1.5vw,30px);font-weight:700;letter-spacing:.13em;display:flex;gap:1.9vw}
+.screen2 .slist li::before{content:counter(s) ".";min-width:1.4vw}
+.screen2 .sfoot{margin-top:auto;font-size:clamp(14px,1.55vw,32px);font-weight:700}
+.screen2 .sfoot b{color:var(--so);font-weight:700}
 </style>
 </head>
 <body>
@@ -202,7 +215,7 @@ function tick() {
   document.querySelectorAll('[data-timer]').forEach(el => {
     if (!end) { el.textContent = ''; return; }
     const left = Math.max(0, Math.round((end - Date.now()) / 1000));
-    el.textContent = left ? Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') : 'Time. Wrap up and wait for your next group.';
+    el.textContent = left ? Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') : (el.dataset.timer === 'short' ? 'Time' : 'Time. Wrap up and wait for your next group.');
   });
 }
 setInterval(tick, 1000);
@@ -313,15 +326,15 @@ function findMe() {
 
 /* ---------- room screen ---------- */
 function viewScreen() {
-  let h = '<div class="screen stack">' + mark('Tech Hiring IRL · Chicago');
-  if (S.nodb || !S.ready) return h + waiting() + '</div>';
-  const rd = curRound();
-  if (!rd) return h + '<p class="eyebrow">Welcome</p><h1>Check in at the desk, then find your name on your phone</h1><p class="muted">' + present('candidate').length + ' candidates and ' + present('rep').length + ' company reps are here.</p></div>';
-  if (S.ev.ended) return h + '<p class="eyebrow">Round over</p><h1>Round ' + rd.n + ' has ended</h1><p class="muted" style="font-size:18px">Thank your group. Check your phone for what is next.</p></div>';
-  h += '<div class="row" style="justify-content:space-between"><div><p class="eyebrow">Happening now</p><h1>Round ' + rd.n + ' has started</h1></div><div class="timer" data-timer></div></div>';
-  h += '<p class="muted" style="font-size:18px">Open the event page on your phone and enter your name to see your station.</p>'
-    + '<div class="card stack"><p class="eyebrow blue">Icebreaker</p><h2 style="font-size:24px">' + esc(rd.prompt || '') + '</h2></div></div>';
-  return h;
+  // Main room display: round, timer, icebreaker and round guidance. Never shows who is in which group.
+  const rd = curRound(), foot = '<div class="sfoot">The <b>{</b>Dev<b>}</b> Difference</div>';
+  const frame = (round, right, eyebrow, big, extra) => '<div class="screen2"><div class="shead"><div class="sround">' + round + '</div><div class="stimer"' + (right === 'timer' ? ' data-timer="short">' : '>' + right) + '</div></div>'
+    + '<div class="sbody"><p class="seyebrow">' + eyebrow + '</p><h1 class="sq">' + big + '</h1>' + (extra || '') + '</div>' + foot + '</div>';
+  if (S.nodb || !S.ready) return frame('Tech Hiring IRL', '', 'One moment', S.slow || S.nodb ? 'Connecting to the event...' : 'Loading...', '');
+  const guide = '<p class="sguide">Guidance for a round – Make time for everyone to share : )</p><ol class="slist"><li>Icebreaker question</li><li>Learn about company &amp; each other</li><li>’Walk away with’ question</li></ol>';
+  if (!rd) return frame('Welcome', '', 'Tech Hiring IRL', 'Check in at the desk, then open the event page on your phone.', '<p class="sguide">Rounds start soon. Grab a snack and say hello.</p>');
+  if (S.ev.ended) return frame('Round ' + rd.n, 'Ended', 'Round over', 'Thank your group. Check your phone for what’s next.', '');
+  return frame('Round ' + rd.n, 'timer', 'Icebreaker', esc(rd.prompt || ''), guide);
 }
 function stationCards(stations, editable) {
   return '<div class="stations">' + stations.map(s => {
