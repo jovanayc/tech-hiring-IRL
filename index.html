@@ -58,6 +58,7 @@ button.chip.on{background:var(--accent);border-color:var(--accent);color:#140700
 button.rank{display:flex;align-items:center;gap:10px;text-align:left} .rank .num{width:24px;height:24px;border-radius:50%;border:1px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex:none}
 .linkbtn{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;font-weight:500;cursor:pointer;font-size:inherit}
 .profile{display:grid;gap:6px;border:1px solid var(--line);border-radius:10px;padding:12px} .profile>div{display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:baseline} .profile span{overflow-wrap:anywhere}
+.profgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
 </style>
 </head>
 <body>
@@ -204,13 +205,12 @@ function viewAttendee() {
   let h = '<div class="narrow stack">' + mark('Tech Hiring IRL · Chicago');
   if (S.nodb || !S.ready) return h + waiting() + '</div>';
   const me = S.people[S.me], live = curRound();
-  // Everyone who opens the link sees the round status, timer and every group
+  // Everyone who opens the link sees the round status and timer. Their own station shows only after they enter their name.
   const status = live ? '<div class="card row" style="justify-content:space-between"><div><p class="eyebrow">Happening now</p><h2>Round ' + live.n + ' has started</h2></div><div class="timer" data-timer></div></div>'
     : '<div class="card"><p class="eyebrow">Up next</p><h2>Groups have not started yet</h2><p class="muted">This page updates on its own when round 1 begins.</p></div>';
-  const allGroups = live ? '<div class="stack"><h2>All groups this round</h2>' + stationCards(live.stations, false) + '</div>' : '';
   h += status;
   if (!me) {
-    h += allGroups + '<div class="stack"><h2>Find your name to see just your station</h2></div>'
+    h += '<div class="stack"><h2>Enter your name to see your station</h2></div>'
       + '<form class="card stack" data-form="find"><label>First name<input id="find-first" data-draft="ff" value="' + dv('ff') + '" autocomplete="given-name"></label>'
       + '<label>Last name<input id="find-last" data-draft="fl" value="' + dv('fl') + '" autocomplete="family-name"></label>'
       + (S.findErr ? '<p class="note">' + esc(S.findErr) + '</p>' : '') + '<button class="primary big" type="submit">Find me</button></form>';
@@ -221,7 +221,6 @@ function viewAttendee() {
     else if (st) h += goCard(me, rd, st);
     else if (rd) h += '<div class="card stack"><h2>You\'re checked in</h2><p class="muted">Round ' + rd.n + ' is under way. The team is placing you now, so keep this page open.</p></div>';
     else h += '<div class="card stack"><h2>You\'re checked in</h2><p class="muted">Grab a snack and say hello to people. Your group will appear here when the first round starts.</p></div>';
-    h += allGroups;
     if (S.ev.surveyOpen && SUPA && me.checkedIn && me.type !== 'guest') h += S.surveyDone ? '<div class="card"><p class="muted">Thanks, your exit survey is in.</p></div>'
       : '<div class="card stack"><p class="eyebrow">Before you go</p><h2>Tell us who you want to keep talking to</h2><p class="muted">It takes 20 seconds and it\'s how we set up your follow-up intros.</p><button class="primary big" data-act="nav" data-id="survey">Take the exit survey</button></div>';
     else if (S.ev.surveyOpen) h += '<div class="card stack"><p class="eyebrow">Before you go</p><h2>Tell us who you want to keep talking to</h2><p class="muted">Stop at the exit table. It takes 20 seconds and it\'s how we set up your follow-up intros.</p></div>';
