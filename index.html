@@ -82,6 +82,7 @@ table.rt{width:100%;border-collapse:collapse;font-size:14px} table.rt th{text-al
 .screen2 .sqr svg{display:block;width:100%;height:auto}
 .screen2 .sqrcap{margin:0;font-size:clamp(13px,1.5vw,30px);font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--so)}
 .screen2 .sqrurl{margin:0;font-size:clamp(11px,1.15vw,24px);font-weight:500;color:#cfc8ba}
+details.notes>summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;list-style:none;min-height:28px} details.notes>summary::-webkit-details-marker{display:none} details.notes>summary .nhint::after{content:'Tap to open'} details.notes[open]>summary .nhint::after{content:'Tap to close'} details.notes textarea{min-height:130px}
 </style>
 </head>
 <body>
@@ -281,39 +282,39 @@ function goCard(me, rd, st) {
   if (!over) h += '<div class="card stack"><p class="eyebrow blue">Icebreaker</p><h2>' + esc(rd.prompt || '') + '</h2><p class="muted">Everyone answers, about two minutes in total.</p></div>';
   const goal = String((isRep ? rd.goalRep : rd.goalCand) || '').trim(), rest = goal.replace(/^leave knowing\s+/i, '');
   if (goal && !over) h += '<div class="card stack"><p class="eyebrow">Leave knowing</p><p>' + esc(rest.charAt(0).toUpperCase() + rest.slice(1)) + '</p></div>';
-  return h + notesCard(me, rd, st);
+  return h + notesCard(me);
 }
-/* ---------- attendee notes: kept on the phone, saved for the team, emailed back on request ---------- */
+/* ---------- attendee notes: one running note, saved automatically, emailed back by the team after the event ---------- */
 const notesKey = id => 'tdd-irl-notes-' + id;
-function myNotes(id) { if (!S.myNotes || S.myNotesFor !== id) { S.myNotesFor = id; try { S.myNotes = JSON.parse(localStorage.getItem(notesKey(id)) || '{}'); } catch (e) { S.myNotes = {}; } if (!S.myNotes.rounds) S.myNotes = { rounds: {}, email: '', sendRequested: false }; } return S.myNotes; }
+function myNotes(id) {
+  if (!S.myNotes || S.myNotesFor !== id) {
+    S.myNotesFor = id; let m = {}; try { m = JSON.parse(localStorage.getItem(notesKey(id)) || '{}'); } catch (e) {}
+    if (typeof m.text !== 'string') m = { text: Object.keys(m.rounds || {}).sort().map(k => (m.rounds[k].text || '').trim()).filter(Boolean).join('\n\n') };  // carry over notes written per round
+    S.myNotes = m;
+  }
+  return S.myNotes;
+}
 const keepNotes = id => { try { localStorage.setItem(notesKey(id), JSON.stringify(myNotes(id))); } catch (e) {} };
-const roundLabel = (me, st) => { const rep = S.people[st.rep]; return me.id === st.rep ? 'my group: ' + st.cands.map(id => name(S.people[id])).join(', ') : (rep ? rep.company + ' with ' + name(rep) : ''); };
-const notesText = id => { const r = myNotes(id).rounds; return Object.keys(r).sort().filter(k => (r[k].text || '').trim()).map(k => 'Round ' + k + (r[k].with ? ' (' + r[k].with + ')' : '') + '\n' + r[k].text.trim()).join('\n\n'); };
-const NOTE_HINT = 'Your notes save as you type and are shared with The Dev Difference team. Press Send and we will email them to you after the event.';
+const NOTE_HINT = 'Saves automatically. You\'ll get an email after the event with your notes.';
 const sayNote = msg => { S.noteStatus = msg; const el = document.getElementById('note-status'); if (el) el.textContent = msg; };
 function pushNotes() {
   const me = S.people[S.me], m = myNotes(S.me); if (!me || !S.db) return Promise.reject(new Error('offline'));
-  return S.db.doc('notes/' + me.id).set({ name: name(me), type: me.type, rounds: JSON.parse(JSON.stringify(m.rounds)), email: m.email || '', sendRequested: !!m.sendRequested, at: new Date().toISOString() });
+  return S.db.doc('notes/' + me.id).set({ name: name(me), type: me.type, text: m.text || '', at: new Date().toISOString() });
 }
-function notesCard(me, rd, st) {
+let notesOpen = true; try { notesOpen = localStorage.getItem('tdd-irl-notes-open') !== '0'; } catch (e) {}
+function notesCard(me) {
   if (!SUPA) return '';
-  const m = myNotes(me.id), cur = m.rounds[rd.n] || {}, earlier = Object.keys(m.rounds).filter(k => +k !== rd.n && (m.rounds[k].text || '').trim()).sort();
-  return '<div class="card stack"><p class="eyebrow">Your notes</p><label>Round ' + rd.n + ': ' + esc(roundLabel(me, st)) + '<textarea id="note-box" data-note="' + rd.n + '" data-with="' + esc(roundLabel(me, st)) + '" placeholder="Who stood out, what you want to follow up on, anything to remember.">' + esc(cur.text || '') + '</textarea></label>'
-    + earlier.map(k => '<p class="note small"><b>Round ' + k + (m.rounds[k].with ? ', ' + esc(m.rounds[k].with) : '') + ':</b> ' + esc(m.rounds[k].text) + '</p>').join('')
-    + '<label>Email my notes to<input id="note-email" type="email" inputmode="email" autocomplete="email" data-note-email="1" placeholder="you@example.com" value="' + esc(m.email || '') + '"></label>'
-    + '<button class="primary big" data-act="sendnotes">' + (m.sendRequested ? 'Send again with my latest notes' : 'Send my notes to my email') + '</button>'
-    + '<p class="small muted" id="note-status">' + esc(S.noteStatus || (m.sendRequested ? 'Got it. We will email your notes to ' + m.email + ' after the event.' : NOTE_HINT)) + '</p>'
-    + '<div class="row"><button class="ghost" data-act="mailnotes">Open in my mail app now</button><button class="ghost" data-act="copynotes">Copy my notes</button></div></div>';
+  const m = myNotes(me.id);
+  return '<details class="card notes" id="notes-box"' + (notesOpen ? ' open' : '') + '><summary><span class="eyebrow">Your notes</span><span class="small muted nhint"></span></summary>'
+    + '<div class="stack" style="margin-top:12px"><textarea id="note-box" data-note="1" aria-label="Your notes" placeholder="Who stood out, what you want to follow up on, anything to remember.">' + esc(m.text || '') + '</textarea>'
+    + '<p class="small muted" id="note-status">' + esc(S.noteStatus || NOTE_HINT) + '</p></div></details>';
 }
+document.addEventListener('toggle', e => { if (e.target && e.target.id === 'notes-box') { notesOpen = e.target.open; try { localStorage.setItem('tdd-irl-notes-open', notesOpen ? '1' : '0'); } catch (err) {} } }, true);
 let noteTimer = null;
 document.addEventListener('input', e => {
-  const t = e.target; if (!t.dataset || !S.me) return;
-  const m = myNotes(S.me);
-  if (t.dataset.note) m.rounds[t.dataset.note] = { text: t.value.slice(0, 4000), with: t.dataset.with || '' };
-  else if (t.dataset.noteEmail) m.email = t.value.trim().slice(0, 200);
-  else return;
-  keepNotes(S.me);
-  clearTimeout(noteTimer); noteTimer = setTimeout(() => { pushNotes().then(() => sayNote(myNotes(S.me).sendRequested ? 'Saved. We will email your latest notes to ' + myNotes(S.me).email + ' after the event.' : 'Saved. ' + NOTE_HINT), () => sayNote('Saved on this phone. We could not reach the event server just now and will try again when you type.')); }, 1200);
+  const t = e.target; if (!t.dataset || !t.dataset.note || !S.me) return;
+  myNotes(S.me).text = t.value.slice(0, 8000); keepNotes(S.me);
+  clearTimeout(noteTimer); noteTimer = setTimeout(() => { pushNotes().then(() => sayNote('Saved. You\'ll get an email after the event with your notes.'), () => sayNote('Saved on this phone. We could not reach the event server just now and will try again when you type.')); }, 1200);
 });
 function findMe() {
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[^a-z]/g, '');
@@ -388,17 +389,7 @@ function viewKiosk() {
 }
 
 /* ---------- actions ---------- */
-const noteActions = {
-  sendnotes: () => {
-    const m = myNotes(S.me), box = document.getElementById('note-email'); if (box) m.email = box.value.trim();
-    if (!notesText(S.me)) { S.noteStatus = 'Type a note first, then press Send.'; return render(); }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m.email || '')) { S.noteStatus = 'Enter the email address you want your notes sent to.'; return render(); }
-    m.sendRequested = true; keepNotes(S.me); clearTimeout(noteTimer); S.noteStatus = 'Sending...'; render();
-    pushNotes().then(() => { S.noteStatus = 'Got it. We will email your notes to ' + m.email + ' after the event.'; render(); }, () => { m.sendRequested = false; keepNotes(S.me); S.noteStatus = 'That did not go through. Check your connection and press Send again. Your notes are still on this phone.'; render(); });
-  },
-  mailnotes: () => { const body = notesText(S.me), m = myNotes(S.me); if (!body) { S.noteStatus = 'Type a note first.'; return render(); } location.href = 'mailto:' + encodeURIComponent(m.email || '') + '?subject=' + encodeURIComponent('My Tech Hiring IRL notes') + '&body=' + encodeURIComponent(body + '\n\nFrom Tech Hiring IRL, hosted by The Dev Difference'); },
-  copynotes: () => { const body = notesText(S.me); const done = ok => { S.noteStatus = ok ? 'Copied. Paste your notes anywhere.' : 'Copying is blocked on this phone. Use Send or your mail app.'; render(); }; if (!body) { S.noteStatus = 'Type a note first.'; return render(); } try { navigator.clipboard.writeText(body).then(() => done(true), () => done(false)); } catch (e) { done(false); } }
-};
+const noteActions = {};
 const act = Object.assign({}, noteActions, {
   notme: () => { S.me = null; try { localStorage.removeItem('tdd-irl-me'); } catch (e) {} render(); },
   nav: d => nav(d.id || ''),
