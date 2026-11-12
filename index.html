@@ -122,7 +122,7 @@ function makeSupaDb(cfg) {
 <script>
 // Tech Hiring IRL: check-in, live groups per company rep, exit survey, team console.
 const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const COLORS = [['Green', '#3ecf8e'], ['Blue', '#4da3ff'], ['Yellow', '#ffd23f'], ['Pink', '#ff7ac3'], ['Purple', '#a98bff'], ['Teal', '#2fd3d0'], ['Red', '#ff5d5d'], ['White', '#f3efe7']];
+const COLORS = [['Green', '#3ecf8e'], ['Blue', '#4da3ff'], ['Yellow', '#ffd23f'], ['Pink', '#ff7ac3'], ['Purple', '#a98bff'], ['Teal', '#2fd3d0'], ['Red', '#ff5d5d'], ['White', '#f3efe7'], ['Lime', '#b6e33e'], ['Brown', '#b9814f'], ['Gray', '#9aa0a6'], ['Peach', '#ffb38a']];
 const ROLES = ['ML/AI', 'Full-stack', 'Software', 'Founding', 'Forward deployed', 'Security', 'QA'];
 const DEFAULT_CFG = { minutes: 17, companies: [], prompts: [] };
 const SUPA = (typeof window !== 'undefined' && window.TDD_SUPABASE) || null;  // set on the no-login build
