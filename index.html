@@ -76,6 +76,12 @@ table.rt{width:100%;border-collapse:collapse;font-size:14px} table.rt th{text-al
 .screen2 .slist li::before{content:counter(s) ".";min-width:1.4vw}
 .screen2 .sfoot{margin-top:auto;font-size:clamp(14px,1.55vw,32px);font-weight:700}
 .screen2 .sfoot b{color:var(--so);font-weight:700}
+.screen2 .swelcome{display:grid;grid-template-columns:1fr auto;gap:5vw;align-items:center}
+.screen2 .sqrwrap{display:flex;flex-direction:column;align-items:center;gap:1.6vh}
+.screen2 .sqr{background:#f6f2ea;border-radius:1.1vw;padding:.6vw;width:min(25vw,42vh)}
+.screen2 .sqr svg{display:block;width:100%;height:auto}
+.screen2 .sqrcap{margin:0;font-size:clamp(13px,1.5vw,30px);font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--so)}
+.screen2 .sqrurl{margin:0;font-size:clamp(11px,1.15vw,24px);font-weight:500;color:#cfc8ba}
 </style>
 </head>
 <body>
@@ -177,7 +183,7 @@ async function boot() {
   db.collection('rounds').onSnapshot(s => { S.rounds = toMap(s); requestRender(); }, fail);
   db.doc('state/event').onSnapshot(d => { S.ev = { ...EV0, ...(d.exists ? d.data() : {}) }; requestRender(); }, fail);
   if (TEAM && (S.admin || SUPA)) {
-    db.collection('private').onSnapshot(s => { S.priv = toMap(s); S.cfg = { ...DEFAULT_CFG, ...(S.priv.config || {}) }; delete S.cfg.id; requestRender(); }, fail);
+    db.collection('private').onSnapshot(s => { S.priv = toMap(s); S.cfg = { ...DEFAULT_CFG, ...(S.priv.config || {}) }; delete S.cfg.id; requestRender(); clearTimeout(S.liTimer); S.liTimer = setTimeout(syncLinkedIn, 1500); }, fail);
     db.collection('survey').onSnapshot(s => { S.survey = toMap(s); requestRender(); }, fail);
     if (SUPA) db.collection('notes').onSnapshot(s => { S.notes = toMap(s); requestRender(); }, fail);
   }
@@ -325,6 +331,8 @@ function findMe() {
 }
 
 /* ---------- room screen ---------- */
+const EVENT_URL = 'https://jovanayc.github.io/tech-hiring-IRL/';
+const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 370 370" class="segno"><g transform="scale(10)"><path fill="#f6f2ea" d="M0 0h37v37h-37z"/><path class="qrline" stroke="#0b0b0b" d="M2 2.5h7m1 0h1m3 0h1m1 0h2m6 0h1m3 0h7m-33 1h1m5 0h1m1 0h3m3 0h4m3 0h2m1 0h1m1 0h1m5 0h1m-33 1h1m1 0h3m1 0h1m2 0h3m3 0h1m1 0h2m2 0h1m1 0h1m2 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m2 0h1m1 0h3m5 0h3m1 0h2m1 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m2 0h2m2 0h4m1 0h1m2 0h1m1 0h1m2 0h1m1 0h3m1 0h1m-33 1h1m5 0h1m3 0h2m2 0h1m11 0h1m5 0h1m-33 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-24 1h1m3 0h1m1 0h1m6 0h1m1 0h1m-24 1h1m4 0h3m1 0h1m1 0h1m1 0h1m2 0h1m4 0h4m5 0h2m-30 1h3m1 0h2m2 0h1m2 0h3m1 0h2m3 0h1m4 0h3m-25 1h1m2 0h2m3 0h1m3 0h1m3 0h1m3 0h1m1 0h1m1 0h2m-31 1h2m1 0h2m2 0h1m4 0h1m1 0h2m3 0h1m1 0h1m1 0h1m2 0h5m-31 1h2m1 0h1m1 0h3m1 0h2m2 0h7m1 0h6m3 0h1m-32 1h3m1 0h1m3 0h2m1 0h1m1 0h2m1 0h1m4 0h1m1 0h1m2 0h2m1 0h1m1 0h2m-30 1h1m2 0h2m1 0h1m1 0h2m3 0h1m1 0h1m1 0h2m2 0h3m1 0h2m1 0h1m-30 1h1m2 0h1m3 0h2m1 0h5m1 0h2m3 0h3m2 0h1m1 0h1m1 0h1m-33 1h1m1 0h1m1 0h8m2 0h1m1 0h5m1 0h1m1 0h2m1 0h2m3 0h1m-33 1h5m4 0h1m1 0h1m4 0h2m1 0h3m1 0h1m2 0h1m2 0h2m1 0h1m-32 1h7m4 0h8m1 0h1m1 0h2m2 0h1m1 0h2m1 0h1m-33 1h1m1 0h2m4 0h3m1 0h2m1 0h2m1 0h1m3 0h2m1 0h1m2 0h3m1 0h1m-32 1h4m1 0h2m1 0h3m3 0h1m1 0h1m1 0h1m1 0h2m2 0h1m1 0h3m1 0h2m-33 1h1m4 0h1m1 0h1m1 0h2m1 0h4m1 0h1m1 0h2m1 0h2m3 0h3m-30 1h1m2 0h1m1 0h2m3 0h4m1 0h1m1 0h1m8 0h1m2 0h1m1 0h1m-32 1h1m7 0h2m1 0h2m3 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h2m1 0h4m-33 1h7m4 0h2m1 0h2m2 0h1m1 0h1m1 0h1m1 0h5m2 0h1m-24 1h4m1 0h1m1 0h1m1 0h1m1 0h3m1 0h2m3 0h1m1 0h1m1 0h1m-33 1h7m1 0h1m1 0h2m3 0h1m4 0h2m1 0h2m1 0h1m1 0h1m1 0h1m-31 1h1m5 0h1m2 0h5m1 0h3m1 0h1m3 0h2m3 0h3m-31 1h1m1 0h3m1 0h1m3 0h1m5 0h3m2 0h2m1 0h6m-30 1h1m1 0h3m1 0h1m3 0h3m2 0h1m1 0h1m2 0h4m1 0h1m1 0h4m1 0h1m-33 1h1m1 0h3m1 0h1m2 0h1m2 0h1m1 0h1m2 0h1m1 0h2m4 0h1m1 0h6m-33 1h1m5 0h1m1 0h3m1 0h1m1 0h3m2 0h1m6 0h5m-31 1h7m3 0h2m1 0h1m2 0h2m4 0h3m2 0h1m3 0h1"/></g></svg>';
 function viewScreen() {
   // Main room display: round, timer, icebreaker and round guidance. Never shows who is in which group.
   const rd = curRound(), foot = '<div class="sfoot">The <b>{</b>Dev<b>}</b> Difference</div>';
@@ -332,7 +340,9 @@ function viewScreen() {
     + '<div class="sbody"><p class="seyebrow">' + eyebrow + '</p><h1 class="sq">' + big + '</h1>' + (extra || '') + '</div>' + foot + '</div>';
   if (S.nodb || !S.ready) return frame('Tech Hiring IRL', '', 'One moment', S.slow || S.nodb ? 'Connecting to the event...' : 'Loading...', '');
   const guide = '<p class="sguide">Guidance for a round – Make time for everyone to share : )</p><ol class="slist"><li>Icebreaker question</li><li>Learn about company &amp; each other</li><li>’Walk away with’ question</li></ol>';
-  if (!rd) return frame('Welcome', '', 'Tech Hiring IRL', 'Check in at the desk, then open the event page on your phone.', '<p class="sguide">Rounds start soon. Grab a snack and say hello.</p>');
+  if (!rd) return '<div class="screen2"><div class="shead"><div class="sround">Welcome</div><div class="stimer"></div></div>'
+    + '<div class="sbody swelcome"><div><p class="seyebrow">Tech Hiring IRL</p><h1 class="sq">Check in at the desk, then scan to open the event page on your phone.</h1><p class="sguide">Rounds start soon. Grab a snack and say hello.</p></div>'
+    + (QR_SVG ? '<div class="sqrwrap"><div class="sqr">' + QR_SVG + '</div><p class="sqrcap">Scan for your group</p><p class="sqrurl">' + esc(EVENT_URL.replace(/^https?:\/\//, '').replace(/\/$/, '')) + '</p></div>' : '') + '</div>' + foot + '</div>';
   if (S.ev.ended) return frame('Round ' + rd.n, 'Ended', 'Round over', 'Thank your group. Check your phone for what’s next.', '');
   return frame('Round ' + rd.n, 'timer', 'Icebreaker', esc(rd.prompt || ''), guide);
 }
