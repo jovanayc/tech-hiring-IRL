@@ -62,6 +62,7 @@ button.rank{display:flex;align-items:center;gap:10px;text-align:left} .rank .num
 .eyebrow.blue{color:#4da3ff} a.chip{text-decoration:none;border-color:#4da3ff;color:var(--text)} a.plink{color:var(--text);text-decoration:underline;text-decoration-color:#4da3ff;text-underline-offset:3px}
 .li{display:inline-block;font-family:var(--body);font-size:10px;font-weight:700;letter-spacing:.02em;color:#06121f;background:#4da3ff;border-radius:4px;padding:1px 6px;margin-left:7px;vertical-align:middle;text-decoration:none}
 @media (pointer:coarse){button,a.chip,.chip[data-act],select,input{min-height:42px} .chip{padding:8px 12px} .stars button{width:46px;height:46px}}
+table.rt{width:100%;border-collapse:collapse;font-size:14px} table.rt th{text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)} table.rt td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top} table.rt tr:last-child td{border-bottom:0} table.rt td:first-child{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -132,7 +133,7 @@ const ROLES = ['ML/AI', 'Full-stack', 'Software', 'Founding', 'Forward deployed'
 const DEFAULT_CFG = { minutes: 17, companies: [], prompts: [] };
 const SUPA = (typeof window !== 'undefined' && window.TDD_SUPABASE) || null;  // set on the no-login build
 const TEAM = !(typeof window !== 'undefined' && window.TDD_BUILD === 'public');  // the public page ships without the console
-const EV0 = { round: 0, endsAt: null, surveyOpen: false };
+const EV0 = { round: 0, endsAt: null, surveyOpen: false, ended: false };
 const S = { ready: false, admin: false, people: {}, priv: {}, rounds: {}, ev: { ...EV0 }, survey: {}, notes: {}, cfg: DEFAULT_CFG, me: null, draft: {}, ui: { tab: 'roster', open: null }, proposal: null, sel: null, kiosk: null, toast: '' };
 try { S.me = localStorage.getItem('tdd-irl-me'); S.surveyDone = localStorage.getItem('tdd-irl-survey') === '1'; } catch (e) {}
 /* ---------- data ---------- */
@@ -172,7 +173,12 @@ async function boot() {
 
 /* ---------- render plumbing ---------- */
 const typing = () => { const a = document.activeElement; return a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'checkbox'; };
-function requestRender() { if (typing()) S.dirty = true; else render(); }
+// Hold redraws while a finger or mouse button is down, so a tap that follows an edit is never lost
+let pressing = false;
+document.addEventListener('pointerdown', () => { pressing = true; }, true);
+const releasePress = () => setTimeout(() => { pressing = false; if (S.dirty && !typing()) render(); }, 60);
+document.addEventListener('pointerup', releasePress, true); document.addEventListener('pointercancel', releasePress, true);
+function requestRender() { if (typing() || pressing) S.dirty = true; else render(); }
 document.addEventListener('focusout', () => setTimeout(() => { if (S.dirty && !typing()) render(); }, 0));
 document.addEventListener('input', e => { const k = e.target.dataset && e.target.dataset.draft; if (k) S.draft[k] = e.target.value; });
 window.addEventListener('hashchange', () => { S.route = (location.hash || '').replace('#', ''); render(); });
@@ -211,7 +217,8 @@ function viewAttendee() {
   if (S.nodb || !S.ready) return h + waiting() + '</div>';
   const me = S.people[S.me], live = curRound();
   // Everyone who opens the link sees the round status and timer. Their own station shows only after they enter their name.
-  const status = live ? '<div class="card row" style="justify-content:space-between"><div><p class="eyebrow">Happening now</p><h2>Round ' + live.n + ' has started</h2></div><div class="timer" data-timer></div></div>'
+  const status = live && S.ev.ended ? '<div class="card"><p class="eyebrow">Round over</p><h2>Round ' + live.n + ' has ended</h2><p class="muted">Thank your group. This page updates on its own when the next part starts.</p></div>'
+    : live ? '<div class="card row" style="justify-content:space-between"><div><p class="eyebrow">Happening now</p><h2>Round ' + live.n + ' has started</h2></div><div class="timer" data-timer></div></div>'
     : '<div class="card"><p class="eyebrow">Up next</p><h2>Groups have not started yet</h2><p class="muted">This page updates on its own when round 1 begins.</p></div>';
   h += status;
   if (!me) {
@@ -242,18 +249,19 @@ function goCard(me, rd, st) {
   const rep = S.people[st.rep], col = colorOf(rep), isRep = me.id === st.rep;
   const others = st.cands.filter(id => id !== me.id), anyLinks = [rep, ...st.cands.map(id => S.people[id])].some(p => p && p.id !== me.id && liUrl(p));
   const co = (rd.companies || {})[rep ? rep.company : ''] || {}, site = safeUrl(co.site);
-  let h = '<div class="go stack" style="--c:' + col[1] + '"><p class="eyebrow">Round ' + rd.n + '</p>';
-  h += isRep ? '<p class="muted">Your station is</p><div class="color">' + col[0] + '</div><h3>Your group this round</h3>' + linkChips(st.cands)
-    : '<p class="muted">Go to the</p><div class="color">' + col[0] + ' station</div><h2>You\'re meeting ' + personLink(rep) + '</h2><p class="muted">' + esc(rep ? rep.company : '') + '</p>'
+  const over = !!S.ev.ended;
+  let h = '<div class="go stack" style="--c:' + col[1] + '"><p class="eyebrow">Round ' + rd.n + (over ? ' · ended' : '') + '</p>';
+  h += isRep ? '<p class="muted">Your station ' + (over ? 'was' : 'is') + '</p><div class="color">' + col[0] + '</div><h3>Your group this round</h3>' + linkChips(st.cands)
+    : '<p class="muted">' + (over ? 'You were at the' : 'Go to the') + '</p><div class="color">' + col[0] + ' station</div><h2>' + (over ? 'You met ' : 'You\'re meeting ') + personLink(rep) + '</h2><p class="muted">' + esc(rep ? rep.company : '') + '</p>'
       + (others.length ? '<h3>Also in your group</h3>' + linkChips(others) : '');
   if (anyLinks) h += '<p class="small muted">Tap a name to connect on LinkedIn.</p>';
   h += '</div>';
   if (!isRep && rep && (co.about || co.hiring || site)) h += '<div class="card stack"><p class="eyebrow">About ' + esc(rep.company) + '</p>'
     + (co.about ? '<p>' + esc(co.about) + '</p>' : '') + (co.hiring ? '<p class="muted"><b>Hiring for:</b> ' + esc(co.hiring) + '</p>' : '')
     + (site ? '<p><a href="' + esc(site) + '" target="_blank" rel="noopener">Visit ' + esc(site.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')) + '</a></p>' : '') + '</div>';
-  h += '<div class="card stack"><p class="eyebrow blue">Icebreaker</p><h2>' + esc(rd.prompt || '') + '</h2><p class="muted">Everyone answers, about two minutes in total.</p></div>';
+  if (!over) h += '<div class="card stack"><p class="eyebrow blue">Icebreaker</p><h2>' + esc(rd.prompt || '') + '</h2><p class="muted">Everyone answers, about two minutes in total.</p></div>';
   const goal = String((isRep ? rd.goalRep : rd.goalCand) || '').trim(), rest = goal.replace(/^leave knowing\s+/i, '');
-  if (goal) h += '<div class="card stack"><p class="eyebrow">Leave knowing</p><p>' + esc(rest.charAt(0).toUpperCase() + rest.slice(1)) + '</p></div>';
+  if (goal && !over) h += '<div class="card stack"><p class="eyebrow">Leave knowing</p><p>' + esc(rest.charAt(0).toUpperCase() + rest.slice(1)) + '</p></div>';
   return h + notesCard(me, rd, st);
 }
 /* ---------- attendee notes: kept on the phone, saved for the team, emailed back on request ---------- */
@@ -309,8 +317,10 @@ function viewScreen() {
   if (S.nodb || !S.ready) return h + waiting() + '</div>';
   const rd = curRound();
   if (!rd) return h + '<p class="eyebrow">Welcome</p><h1>Check in at the desk, then find your name on your phone</h1><p class="muted">' + present('candidate').length + ' candidates and ' + present('rep').length + ' company reps are here.</p></div>';
-  h += '<div class="row" style="justify-content:space-between"><div><p class="eyebrow">Round ' + rd.n + '</p><h1>Find your station color</h1></div><div class="timer" data-timer></div></div>';
-  h += '<p class="note" style="font-size:16px">' + esc(rd.prompt || '') + '</p>' + stationCards(rd.stations, false) + '</div>';
+  if (S.ev.ended) return h + '<p class="eyebrow">Round over</p><h1>Round ' + rd.n + ' has ended</h1><p class="muted" style="font-size:18px">Thank your group. Check your phone for what is next.</p></div>';
+  h += '<div class="row" style="justify-content:space-between"><div><p class="eyebrow">Happening now</p><h1>Round ' + rd.n + ' has started</h1></div><div class="timer" data-timer></div></div>';
+  h += '<p class="muted" style="font-size:18px">Open the event page on your phone and enter your name to see your station.</p>'
+    + '<div class="card stack"><p class="eyebrow blue">Icebreaker</p><h2 style="font-size:24px">' + esc(rd.prompt || '') + '</h2></div></div>';
   return h;
 }
 function stationCards(stations, editable) {

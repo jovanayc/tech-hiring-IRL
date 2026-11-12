@@ -7,7 +7,7 @@ Live event page for The Dev Difference's Tech Hiring IRL night. No login needed.
 | What | Link |
 | --- | --- |
 | **Event page** (your group, the round timer, the exit survey) | https://jovanayc.github.io/tech-hiring-IRL/ |
-| **Room screen** (all groups, for the big display) | https://jovanayc.github.io/tech-hiring-IRL/#screen |
+| **Room screen** (round status, timer and icebreaker, for the big display) | https://jovanayc.github.io/tech-hiring-IRL/#screen |
 
 ## How to use the event page
 
