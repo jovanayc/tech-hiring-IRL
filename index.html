@@ -57,6 +57,7 @@ button.chip.on{background:var(--accent);border-color:var(--accent);color:#140700
 @media (prefers-reduced-motion:no-preference){button{transition:border-color .12s,background .12s}}
 button.rank{display:flex;align-items:center;gap:10px;text-align:left} .rank .num{width:24px;height:24px;border-radius:50%;border:1px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex:none}
 .linkbtn{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;font-weight:500;cursor:pointer;font-size:inherit}
+.profile{display:grid;gap:6px;border:1px solid var(--line);border-radius:10px;padding:12px} .profile>div{display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:baseline} .profile span{overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -247,6 +248,9 @@ function findMe() {
   const all = Object.values(S.people);
   let hits = all.filter(p => norm(p.first) === f && norm(p.last) === l);
   if (!hits.length) hits = all.filter(p => norm(p.last) === l && (norm(p.first).startsWith(f) || f.startsWith(norm(p.first))));
+  // long or shortened last names: match any one word of it, then fall back to a first name only one person has
+  if (!hits.length) hits = all.filter(p => norm(p.first) === f && String(p.last || '').split(/[\s-]+/).some(w => norm(w) === l));
+  if (!hits.length) { const byFirst = all.filter(p => norm(p.first) === f); if (byFirst.length === 1) hits = byFirst; }
   if (hits.length === 1) { S.me = hits[0].id; S.findErr = ''; try { localStorage.setItem('tdd-irl-me', S.me); } catch (e) {} }
   else S.findErr = hits.length ? 'More than one person matches that name. Please see the check-in desk.' : 'We couldn\'t find that name. Check the spelling, or see the check-in desk.';
   render();
