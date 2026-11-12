@@ -98,7 +98,7 @@ function makeSupaDb(cfg) {
   const H = { apikey: cfg.key, Authorization: 'Bearer ' + cfg.key, 'Content-Type': 'application/json' };
   const cache = new Map(), subs = [];
   let pass = null, loaded = false, queue = Promise.resolve(), onError = null, holdUntil = 0;
-  const isPrivate = p => p.startsWith('private/') || p.startsWith('survey/') || p.startsWith('notes/');
+  const isPrivate = p => p.startsWith('private/') || p.startsWith('survey/') || p.startsWith('notes/') || p.startsWith('log/');
   async function call(path, opt) {
     const r = await fetch(base + path, { headers: H, ...opt });
     if (!r.ok) { let m = ''; try { m = (await r.json()).message || ''; } catch (e) {} const err = new Error(m || 'Request failed (' + r.status + ')'); err.status = r.status; throw err; }
@@ -143,7 +143,8 @@ function makeSupaDb(cfg) {
   return { doc, collection, start: errFn => { onError = errFn; loop(); },
     unlock: async p => { const rows = await rpc('team_read', { pass: p }); pass = p; merge(rows, true); notify(); },
     lock: () => { pass = null; },
-    checkEmail: (person, email) => rpc('check_email', { person, email }) };
+    checkEmail: (person, email) => rpc('check_email', { person, email }),
+    logEvent: payload => rpc('log_event', { payload }) };
 }
 </script>
 <script>
@@ -155,7 +156,7 @@ const DEFAULT_CFG = { minutes: 17, companies: [], prompts: [] };
 const SUPA = (typeof window !== 'undefined' && window.TDD_SUPABASE) || null;  // set on the no-login build
 const TEAM = !(typeof window !== 'undefined' && window.TDD_BUILD === 'public');  // the public page ships without the console
 const EV0 = { round: 0, endsAt: null, surveyOpen: false, ended: false };
-const S = { ready: false, admin: false, people: {}, priv: {}, rounds: {}, ev: { ...EV0 }, survey: {}, notes: {}, cfg: DEFAULT_CFG, me: null, draft: {}, ui: { tab: 'roster', open: null }, proposal: null, sel: null, kiosk: null, toast: '' };
+const S = { ready: false, admin: false, people: {}, priv: {}, rounds: {}, ev: { ...EV0 }, survey: {}, notes: {}, log: {}, cfg: DEFAULT_CFG, me: null, draft: {}, ui: { tab: 'roster', open: null }, proposal: null, sel: null, kiosk: null, toast: '' };
 try { S.me = localStorage.getItem('tdd-irl-me'); S.surveyDone = localStorage.getItem('tdd-irl-survey') === '1'; } catch (e) {}
 /* ---------- data ---------- */
 const toMap = snap => { const m = {}; for (const d of snap.docs) m[d.id] = { ...d.data(), id: d.id }; return m; };
@@ -188,7 +189,9 @@ async function boot() {
     db.collection('private').onSnapshot(s => { S.priv = toMap(s); S.cfg = { ...DEFAULT_CFG, ...(S.priv.config || {}) }; delete S.cfg.id; requestRender(); clearTimeout(S.liTimer); S.liTimer = setTimeout(syncLinkedIn, 1500); }, fail);
     db.collection('survey').onSnapshot(s => { S.survey = toMap(s); requestRender(); }, fail);
     if (SUPA) db.collection('notes').onSnapshot(s => { S.notes = toMap(s); requestRender(); }, fail);
+    if (SUPA) db.collection('log').onSnapshot(s => { S.log = toMap(s); requestRender(); }, fail);
   }
+  if (SUPA && S.me && location.hash.replace('#', '') === '') logEvent('open', { person: S.me });
   render();
 }
 
@@ -319,6 +322,14 @@ document.addEventListener('input', e => {
   myNotes(S.me).text = t.value.slice(0, 8000); keepNotes(S.me);
   clearTimeout(noteTimer); noteTimer = setTimeout(() => { pushNotes().then(() => sayNote('Saved. You\'ll get an email after the event with your notes.'), () => sayNote('Saved on this phone. We could not reach the event server just now and will try again when you type.')); }, 1200);
 });
+function deviceInfo() {
+  let id = ''; try { id = localStorage.getItem('tdd-irl-device') || ''; if (!id) { id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('tdd-irl-device', id); } } catch (e) {}
+  const ua = navigator.userAgent || '', touch = (navigator.maxTouchPoints || 0) > 1;
+  const form = /iPad|Tablet/i.test(ua) || (touch && /Macintosh/i.test(ua)) || (/Android/i.test(ua) && !/Mobile/i.test(ua)) ? 'tablet' : /iPhone|iPod|Android|Mobile/i.test(ua) ? 'phone' : 'laptop';
+  const os = /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : /Android/i.test(ua) ? 'Android' : /Macintosh/i.test(ua) ? 'Mac' : /Windows/i.test(ua) ? 'Windows' : 'Other';
+  return { device: id, form, os };
+}
+function logEvent(kind, extra) { try { if (SUPA && S.db && S.db.logEvent) S.db.logEvent({ kind, ...deviceInfo(), ...extra }).catch(() => {}); } catch (e) {} }
 function findMe() {
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[^a-z]/g, '');
   const f = norm(S.draft.ff), l = norm(S.draft.fl);
@@ -331,15 +342,17 @@ function findMe() {
   // long or shortened last names: match any one word of it, then fall back to a first name only one person has
   if (!hits.length) hits = all.filter(p => norm(p.first) === f && String(p.last || '').split(/[\s-]+/).some(w => norm(w) === l));
   if (!hits.length) { const byFirst = all.filter(p => norm(p.first) === f); if (byFirst.length === 1) hits = byFirst; }
-  const signIn = id => { S.me = id; S.findErr = ''; try { localStorage.setItem('tdd-irl-me', S.me); if (email) localStorage.setItem('tdd-irl-email', email); } catch (e) {} };
+  const typed = { first: String(S.draft.ff || '').trim().slice(0, 60), last: String(S.draft.fl || '').trim().slice(0, 60) };
+  const signIn = id => { logEvent('signin', { person: id }); S.me = id; S.findErr = ''; try { localStorage.setItem('tdd-irl-me', S.me); if (email) localStorage.setItem('tdd-irl-email', email); } catch (e) {} };
   if (hits.length === 1 && SUPA) {
     // The email is checked by the database, so nobody's email is ever sent to phones
     S.finding = true; S.findErr = ''; render();
-    return S.db.checkEmail(hits[0].id, email).then(r => { S.finding = false; if (r === 'ok' || r === 'saved') signIn(hits[0].id); else S.findErr = 'That email does not match your registration. Use the email your confirmation was sent to, or see the check-in desk.'; render(); },
+    return S.db.checkEmail(hits[0].id, email).then(r => { S.finding = false; if (r === 'ok' || r === 'saved') signIn(hits[0].id); else { logEvent('fail', { ...typed, person: hits[0].id, reason: 'email did not match' }); S.findErr = 'That email does not match your registration. Use the email your confirmation was sent to, or see the check-in desk.'; } render(); },
       e => { S.finding = false; if (e && e.status === 404) signIn(hits[0].id); else S.findErr = 'We could not check that just now. Check your connection and try again, or see the check-in desk.'; render(); });
   }
   if (hits.length === 1) signIn(hits[0].id);
-  else S.findErr = hits.length ? 'More than one person matches that name. Please see the check-in desk.' : 'We couldn\'t find that name. Check the spelling, or see the check-in desk.';
+  else logEvent('fail', { ...typed, reason: hits.length ? 'more than one match' : 'name not on the list' });
+  if (hits.length !== 1) S.findErr = hits.length ? 'More than one person matches that name. Please see the check-in desk.' : 'We couldn\'t find that name. Check the spelling, or see the check-in desk.';
   render();
 }
 
