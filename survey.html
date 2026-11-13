@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tech Hiring IRL Exit Survey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=DM+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{ /* layout: one dark column for phones, a wide grid for the console and room screen */
+  --bg:#0a0a0a; --surface:#151413; --raised:#1e1c1a; --line:#2e2b27; --text:#f3efe7; --muted:#a8a196; --accent:#ff6a1a;
+  --ok:#4cc38a; --warn:#f2c14e; --bad:#ef5b5b;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif; --body:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  color-scheme:dark;}
+*{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);font-size:14px;line-height:1.45}
+#app{max-width:1180px;margin:0 auto;padding:20px 16px 64px}
+.narrow{max-width:460px;margin:0 auto}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:21px;font-weight:800;line-height:1.15} h2{font-size:16px;font-weight:700} h3{font-size:13px;font-weight:700}
+p{margin:0} a{color:var(--accent)} .muted{color:var(--muted)} .small{font-size:12px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+.mark{font-family:var(--display);font-weight:700;font-size:13px} .mark b{color:var(--accent);font-weight:700}
+.eyebrow{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.stack{display:flex;flex-direction:column;gap:14px} .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grow{flex:1 1 140px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+input,select,textarea{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
+textarea{min-height:84px;resize:vertical} label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:5px}
+button{font:inherit;font-weight:600;color:var(--text);background:var(--raised);border:1px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer}
+button:hover{border-color:var(--muted)} button:disabled{opacity:.4;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:var(--accent);color:#140700} button.big{padding:11px 14px;font-size:14px;width:100%}
+button.ghost{background:transparent} button.danger{color:var(--bad)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px} .tabs button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;background:transparent;color:var(--text);font-weight:500}
+button.chip.on{background:var(--accent);border-color:var(--accent);color:#140700}
+.pill{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:600;border:1px solid var(--line);color:var(--muted)}
+.pill.ok{color:var(--ok);border-color:var(--ok)} .pill.warn{color:var(--warn);border-color:var(--warn)} .pill.bad{color:var(--bad);border-color:var(--bad)}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block;flex:none}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.stat b{font-family:var(--display);font-size:20px;font-variant-numeric:tabular-nums;display:block;line-height:1.1}
+.person{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)} .person:first-child{border-top:0}
+.check{width:100px;flex:none;white-space:nowrap} .check.on{background:var(--ok);border-color:var(--ok);color:#06140d}
+.edit{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px;margin:4px 0 12px}
+.stations{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.station{background:var(--surface);border:1px solid var(--line);border-top:6px solid var(--c,#666);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.station .who{font-family:var(--display);font-weight:700;font-size:15px}
+.names{display:flex;flex-wrap:wrap;gap:6px}
+.go{border-radius:16px;padding:22px;background:var(--surface);border:1px solid var(--line);border-top:10px solid var(--c,#666)}
+.go .color{font-family:var(--display);font-weight:800;font-size:26px;line-height:1.1;color:var(--c,#fff);text-transform:uppercase}
+.timer{font-family:var(--display);font-weight:800;font-variant-numeric:tabular-nums;font-size:22px;color:var(--accent)}
+.note{border-left:3px solid var(--accent);padding:4px 0 4px 12px}
+.toast{position:fixed;left:16px;right:16px;bottom:16px;max-width:520px;margin:0 auto;background:var(--bad);color:#190404;font-weight:600;border-radius:12px;padding:12px 14px}
+.screen h1{font-size:32px} .screen .station .who{font-size:19px} .screen .chip{font-size:15px;padding:6px 12px} .screen .timer{font-size:40px}
+.stars button{width:40px;height:40px;padding:0;font-size:14px} .stars button.on{background:var(--accent);border-color:var(--accent);color:#140700}
+@media (prefers-reduced-motion:no-preference){button{transition:border-color .12s,background .12s}}
+button.rank{display:flex;align-items:center;gap:10px;text-align:left} .rank .num{width:24px;height:24px;border-radius:50%;border:1px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex:none}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;font-weight:500;cursor:pointer;font-size:inherit}
+.profile{display:grid;gap:6px;border:1px solid var(--line);border-radius:10px;padding:12px} .profile>div{display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:baseline} .profile span{overflow-wrap:anywhere}
+.profgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.eyebrow.blue{color:#4da3ff} a.chip{text-decoration:none;border-color:#4da3ff;color:var(--text)} a.plink{color:var(--text);text-decoration:underline;text-decoration-color:#4da3ff;text-underline-offset:3px}
+.li{display:inline-block;font-family:var(--body);font-size:10px;font-weight:700;letter-spacing:.02em;color:#06121f;background:#4da3ff;border-radius:4px;padding:1px 6px;margin-left:7px;vertical-align:middle;text-decoration:none}
+@media (pointer:coarse){button,a.chip,.chip[data-act],select,input{min-height:42px} .chip{padding:8px 12px} .stars button{width:46px;height:46px}}
+table.rt{width:100%;border-collapse:collapse;font-size:14px} table.rt th{text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)} table.rt td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top} table.rt tr:last-child td{border-bottom:0} table.rt td:first-child{white-space:nowrap}
+.screen2{position:fixed;inset:0;z-index:5;background:#0b0b0b;color:#f6f2ea;font-family:"DM Sans","Helvetica Neue",Arial,sans-serif;padding:5.2vh 5.4vw 5vh;display:flex;flex-direction:column;overflow:hidden;--so:#ee9130}
+.screen2 .shead{display:flex;justify-content:space-between;align-items:flex-start;gap:4vw}
+.screen2 .sround{font-size:clamp(34px,5.6vw,120px);font-weight:700;line-height:1;letter-spacing:.02em;text-transform:uppercase;color:var(--so)}
+.screen2 .stimer{font-size:clamp(40px,7.2vw,150px);font-weight:700;line-height:.95;color:var(--so);font-variant-numeric:tabular-nums;text-transform:uppercase;white-space:nowrap}
+.screen2 .sbody{margin-top:9vh;display:flex;flex-direction:column}
+.screen2 .seyebrow{font-size:clamp(13px,1.55vw,32px);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--so);margin:0 0 4.2vh}
+.screen2 .sq{font-family:inherit;font-size:clamp(28px,4.5vw,96px);font-weight:700;line-height:1.55;letter-spacing:-.005em;margin:0;max-width:90vw;text-wrap:balance}
+.screen2 .sguide{font-size:clamp(13px,1.5vw,30px);font-weight:700;letter-spacing:.13em;color:var(--so);margin:6.5vh 0 0}
+.screen2 .slist{margin:3.4vh 0 0;padding:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:1.5vh}
+.screen2 .slist li{counter-increment:s;font-size:clamp(13px,1.5vw,30px);font-weight:700;letter-spacing:.13em;display:flex;gap:1.9vw}
+.screen2 .slist li::before{content:counter(s) ".";min-width:1.4vw}
+.screen2 .sfoot{margin-top:auto;font-size:clamp(14px,1.55vw,32px);font-weight:700}
+.screen2 .sfoot b{color:var(--so);font-weight:700}
+.screen2 .swelcome{display:grid;grid-template-columns:1fr auto;gap:5vw;align-items:center}
+.screen2 .sqrwrap{display:flex;flex-direction:column;align-items:center;gap:1.6vh}
+.screen2 .sqr{background:#f6f2ea;border-radius:1.1vw;padding:.6vw;width:min(25vw,42vh)}
+.screen2 .sqr svg{display:block;width:100%;height:auto}
+.screen2 .sqrcap{margin:0;font-size:clamp(13px,1.5vw,30px);font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--so)}
+.screen2 .sqrurl{margin:0;font-size:clamp(11px,1.15vw,24px);font-weight:500;color:#cfc8ba}
+details.notes>summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;list-style:none;min-height:28px} details.notes>summary::-webkit-details-marker{display:none} details.notes>summary .nhint::after{content:'Tap to open'} details.notes[open]>summary .nhint::after{content:'Tap to close'} details.notes textarea{min-height:130px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+window.TDD_SUPABASE = { url: "https://syndvtsdtpjbetzbzuzq.supabase.co", key: "sb_publishable_Y38ptqpz6_1jLgmFisG3fw_yvH69LiF" };
+window.TDD_BUILD = "public";
+if (!location.hash) { try { history.replaceState(null, "", "#survey"); } catch (e) { location.hash = "survey"; } }
+</script>
+<script>
+// Data layer for the no-login version: Supabase over plain web requests, checked every few seconds.
+function makeSupaDb(cfg) {
+  const base = cfg.url.replace(/\/+$/, '') + '/rest/v1';
+  const H = { apikey: cfg.key, Authorization: 'Bearer ' + cfg.key, 'Content-Type': 'application/json' };
+  const cache = new Map(), subs = [];
+  let pass = null, loaded = false, queue = Promise.resolve(), onError = null, holdUntil = 0;
+  const isPrivate = p => p.startsWith('private/') || p.startsWith('survey/') || p.startsWith('notes/') || p.startsWith('log/');
+  async function call(path, opt) {
+    const r = await fetch(base + path, { headers: H, ...opt });
+    if (!r.ok) { let m = ''; try { m = (await r.json()).message || ''; } catch (e) {} const err = new Error(m || 'Request failed (' + r.status + ')'); err.status = r.status; throw err; }
+    if (r.status === 204) return null;
+    const t = await r.text(); return t ? JSON.parse(t) : null;
+  }
+  const rpc = (fn, body) => call('/rpc/' + fn, { method: 'POST', body: JSON.stringify(body) });
+  const docSnap = path => { const d = cache.get(path); return { id: path.split('/').pop(), exists: d !== undefined, data: () => d === undefined ? undefined : JSON.parse(JSON.stringify(d)), metadata: { fromCache: false, hasPendingWrites: false } }; };
+  const colSnap = col => { const n = col.split('/').length + 1; const docs = [...cache.keys()].filter(k => k.startsWith(col + '/') && k.split('/').length === n).sort().map(docSnap); return { docs, size: docs.length, empty: !docs.length, docChanges: () => [], metadata: { fromCache: false, hasPendingWrites: false } }; };
+  const sig = s => s.col ? JSON.stringify([...cache.entries()].filter(e => e[0].startsWith(s.path + '/'))) : JSON.stringify(cache.get(s.path) === undefined ? null : cache.get(s.path));
+  function notify(force) { if (!loaded) return; for (const s of subs) { const g = sig(s); if (force || g !== s.sig) { s.sig = g; try { s.fn(s.col ? colSnap(s.path) : docSnap(s.path)); } catch (e) { console.error(e); } } } }
+  function merge(rows, priv) { for (const k of [...cache.keys()]) if (isPrivate(k) === priv) cache.delete(k); for (const r of rows || []) cache.set(r.path, r.data); }
+  async function poll() {
+    if (Date.now() < holdUntil) return;            // let our own write land before reading again
+    const started = Date.now();
+    const pub = await call('/event_docs?select=path,data');
+    const prv = pass ? await rpc('team_read', { pass }) : null;
+    if (started < holdUntil) return;
+    merge(pub, false); if (prv) merge(prv, true);
+    const first = !loaded; loaded = true; notify(first);
+  }
+  async function loop() { try { await poll(); } catch (e) { if (onError) onError(e); } setTimeout(loop, document.hidden ? 12000 : 2500); }
+  function write(ops) {
+    for (const o of ops) o.op === 'delete' ? cache.delete(o.path) : cache.set(o.path, JSON.parse(JSON.stringify(o.data)));
+    holdUntil = Date.now() + 4000; notify();
+    const run = async () => {
+      try {
+        if (ops.length === 1 && ops[0].path.startsWith('survey/') && ops[0].op === 'set') await rpc('submit_survey', { person: ops[0].path.slice(7), payload: ops[0].data });
+        else if (ops.length === 1 && ops[0].path.startsWith('notes/') && ops[0].op === 'set') await rpc('submit_note', { person: ops[0].path.slice(6), payload: ops[0].data });
+        else { if (!pass) throw new Error('Open the team console with the password first.'); await rpc('team_write', { pass, ops }); }
+      } finally { holdUntil = 0; }
+    };
+    const p = queue.then(run); queue = p.catch(() => {}); return p;
+  }
+  let minted = 0;
+  const doc = path => ({ id: path.split('/').pop(), path,
+    get: async () => docSnap(path), set: data => write([{ op: 'set', path, data }]), delete: () => write([{ op: 'delete', path }]),
+    update: data => write([{ op: 'set', path, data: { ...(cache.get(path) || {}), ...data } }]),
+    onSnapshot: fn => { const s = { path, fn, col: false, sig: null }; subs.push(s); if (loaded) { s.sig = sig(s); fn(docSnap(path)); } return () => subs.splice(subs.indexOf(s), 1); } });
+  const collection = path => ({ path, doc: id => doc(path + '/' + (id || 'p' + Date.now().toString(36) + (minted++).toString(36) + Math.random().toString(36).slice(2, 6))), get: async () => colSnap(path),
+    onSnapshot: fn => { const s = { path, fn, col: true, sig: null }; subs.push(s); if (loaded) { s.sig = sig(s); fn(colSnap(path)); } return () => subs.splice(subs.indexOf(s), 1); } });
+  return { doc, collection, start: errFn => { onError = errFn; loop(); },
+    unlock: async p => { const rows = await rpc('team_read', { pass: p }); pass = p; merge(rows, true); notify(); },
+    lock: () => { pass = null; },
+    checkEmail: (person, email) => rpc('check_email', { person, email }),
+    logEvent: payload => rpc('log_event', { payload }) };
+}
+</script>
+<script>
+// Tech Hiring IRL: check-in, live groups per company rep, exit survey, team console.
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const COLORS = [['Green', '#3ecf8e'], ['Blue', '#4da3ff'], ['Yellow', '#ffd23f'], ['Pink', '#ff7ac3'], ['Purple', '#a98bff'], ['Teal', '#2fd3d0'], ['Red', '#ff5d5d'], ['White', '#f3efe7'], ['Lime', '#b6e33e'], ['Brown', '#b9814f'], ['Gray', '#9aa0a6'], ['Peach', '#ffb38a']];
+const ROLES = ['ML/AI', 'Full-stack', 'Software', 'Founding', 'Forward deployed', 'Security', 'QA'];
+const DEFAULT_CFG = { minutes: 17, companies: [], prompts: [] };
+const SUPA = (typeof window !== 'undefined' && window.TDD_SUPABASE) || null;  // set on the no-login build
+const TEAM = !(typeof window !== 'undefined' && window.TDD_BUILD === 'public');  // the public page ships without the console
+const EV0 = { round: 0, endsAt: null, surveyOpen: false, ended: false };
+const S = { ready: false, admin: false, people: {}, priv: {}, rounds: {}, ev: { ...EV0 }, survey: {}, notes: {}, log: {}, cfg: DEFAULT_CFG, me: null, draft: {}, ui: { tab: 'roster', open: null }, proposal: null, sel: null, kiosk: null, toast: '' };
+try { S.me = localStorage.getItem('tdd-irl-me'); S.surveyDone = localStorage.getItem('tdd-irl-survey') === '1'; } catch (e) {}
+/* ---------- data ---------- */
+const toMap = snap => { const m = {}; for (const d of snap.docs) m[d.id] = { ...d.data(), id: d.id }; return m; };
+const name = p => p ? (p.first + ' ' + p.last).trim() : 'Unknown';
+const byName = (a, b) => name(a).localeCompare(name(b));
+const list = type => Object.values(S.people).filter(p => p.type === type).sort(byName);
+const present = type => list(type).filter(p => p.checkedIn && !p.left && (type !== 'rep' || p.company));
+const colorOf = p => COLORS[(p && p.color) || 0] || COLORS[0];
+const curRound = () => S.rounds['r' + S.ev.round] || null;
+const priorRounds = () => { const a = []; for (let i = 1; i <= S.ev.round; i++) if (S.rounds['r' + i]) a.push(S.rounds['r' + i]); return a; };
+async function save(fn) { try { await fn(); } catch (e) { S.toast = 'That did not save. ' + ((e && e.message) || 'Try again.'); render(); setTimeout(() => { S.toast = ''; render(); }, 5000); } }
+
+async function boot() {
+  render();
+  const slow = setTimeout(() => { S.slow = true; render(); }, 10000);
+  let db = null, user = null;
+  if (SUPA) db = makeSupaDb(SUPA);
+  else try { if (window.claude && window.claude.use) [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]); } catch (e) {}
+  S.db = db;
+  if (!db) { clearTimeout(slow); S.nodb = true; render(); return; }
+  if (!SUPA) try { S.admin = !!(user && (await user.canEdit() || await user.isOwner())); } catch (e) {}
+  const fail = () => { clearTimeout(slow); S.slow = true; requestRender(); };
+  if (SUPA) {
+    db.start(() => { if (!S.ready) { S.slow = true; requestRender(); } });
+  }
+  db.collection('people').onSnapshot(s => { S.people = toMap(s); S.ready = true; S.slow = false; clearTimeout(slow); requestRender(); }, fail);
+  db.collection('rounds').onSnapshot(s => { S.rounds = toMap(s); requestRender(); }, fail);
+  db.doc('state/event').onSnapshot(d => { S.ev = { ...EV0, ...(d.exists ? d.data() : {}) }; requestRender(); }, fail);
+  if (TEAM && (S.admin || SUPA)) {
+    db.collection('private').onSnapshot(s => { S.priv = toMap(s); S.cfg = { ...DEFAULT_CFG, ...(S.priv.config || {}) }; delete S.cfg.id; requestRender(); clearTimeout(S.liTimer); S.liTimer = setTimeout(syncLinkedIn, 1500); }, fail);
+    db.collection('survey').onSnapshot(s => { S.survey = toMap(s); requestRender(); }, fail);
+    if (SUPA) db.collection('notes').onSnapshot(s => { S.notes = toMap(s); requestRender(); }, fail);
+    if (SUPA) db.collection('log').onSnapshot(s => { S.log = toMap(s); requestRender(); }, fail);
+  }
+  if (SUPA && S.me && location.hash.replace('#', '') === '') logEvent('open', { person: S.me });
+  render();
+}
+
+/* ---------- render plumbing ---------- */
+const typing = () => { const a = document.activeElement; return a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'checkbox'; };
+// Hold redraws while a finger or mouse button is down, so a tap that follows an edit is never lost
+let pressing = false;
+document.addEventListener('pointerdown', () => { pressing = true; }, true);
+const releasePress = () => setTimeout(() => { pressing = false; if (S.dirty && !typing()) render(); }, 60);
+document.addEventListener('pointerup', releasePress, true); document.addEventListener('pointercancel', releasePress, true);
+function requestRender() { if (typing() || pressing) S.dirty = true; else render(); }
+document.addEventListener('focusout', () => setTimeout(() => { if (S.dirty && !typing()) render(); }, 0));
+document.addEventListener('input', e => { const k = e.target.dataset && e.target.dataset.draft; if (k) S.draft[k] = e.target.value; });
+window.addEventListener('hashchange', () => { S.route = (location.hash || '').replace('#', ''); render(); });
+const dv = k => esc(S.draft[k] || '');
+S.route = (location.hash || '').replace('#', '');
+if (typeof window !== 'undefined' && window.TDD_BUILD === 'team' && !S.route) S.route = 'console';
+const route = () => S.route || '';
+// In-page navigation that does not depend on the address bar
+const nav = r => { S.route = r; try { location.hash = r; } catch (e) {} render(); try { window.scrollTo(0, 0); } catch (e) {} };
+const link = (r, label, cls) => '<button type="button" class="' + (cls || 'linkbtn') + '" data-act="nav" data-id="' + r + '">' + label + '</button>';
+function render() {
+  S.dirty = false;
+  const r = route();
+  let html = r === 'console' ? viewConsole() : r === 'screen' ? viewScreen() : r === 'survey' ? viewKiosk() : viewAttendee();
+  if (S.toast) html += '<div class="toast" role="alert">' + esc(S.toast) + '</div>';
+  document.getElementById('app').innerHTML = html;
+  tick();
+}
+function tick() {
+  const end = S.ev.endsAt ? Date.parse(S.ev.endsAt) : 0;
+  document.querySelectorAll('[data-timer]').forEach(el => {
+    if (!end) { el.textContent = ''; return; }
+    const left = Math.max(0, Math.round((end - Date.now()) / 1000));
+    el.textContent = left ? Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') : (el.dataset.timer === 'short' ? 'Time' : 'Time. Wrap up and wait for your next group.');
+  });
+}
+setInterval(tick, 1000);
+const mark = sub => '<div class="top"><div class="mark">The <b>{</b>Dev<b>}</b> Difference</div><div class="small muted">' + sub + '</div></div>';
+const chips = ids => '<div class="names">' + (ids.length ? ids.map(id => '<span class="chip">' + esc(name(S.people[id])) + '</span>').join('') : '<span class="muted small">Nobody yet</span>') + '</div>';
+const waiting = () => S.nodb && !SUPA ? '<div class="card stack"><h2>Sign in to see your group</h2><p class="muted">This page needs you to be signed in to Claude. You can also find your group on the screen in the room or at the check-in desk.</p></div>'
+  : '<div class="card"><p class="muted">' + (S.slow ? 'We can\'t reach the event data yet. Keep this page open and it will load when the connection returns.' : 'Loading the event...') + '</p></div>';
+
+/* ---------- attendee phone view ---------- */
+function viewAttendee() {
+  let h = '<div class="narrow stack">' + mark('Tech Hiring IRL · Chicago');
+  if (S.nodb || !S.ready) return h + waiting() + '</div>';
+  const me = S.people[S.me], live = curRound();
+  // Everyone who opens the link sees the round status and timer. Their own station shows only after they enter their name.
+  const status = live && S.ev.ended ? '<div class="card"><p class="eyebrow">Round over</p><h2>Round ' + live.n + ' has ended</h2><p class="muted">Thank your group. This page updates on its own when the next part starts.</p></div>'
+    : live ? '<div class="card row" style="justify-content:space-between"><div><p class="eyebrow">Happening now</p><h2>Round ' + live.n + ' has started</h2></div><div class="timer" data-timer></div></div>'
+    : '<div class="card"><p class="eyebrow">Up next</p><h2>Groups have not started yet</h2><p class="muted">This page updates on its own when round 1 begins.</p></div>';
+  h += status;
+  if (!me) {
+    h += '<div class="stack"><h2>' + (SUPA ? 'Sign in to see your station' : 'Enter your name to see your station') + '</h2></div>'
+      + findForm();
+  } else {
+    h += '<div class="row" style="justify-content:space-between"><h1>Hi, ' + esc(me.first) + '</h1><button class="ghost small" data-act="notme">Not you?</button></div>';
+    const rd = curRound(), st = rd && rd.stations.find(s => s.rep === me.id || s.cands.includes(me.id));
+    if (!me.checkedIn) h += '<div class="card stack"><h2>You\'re on the list</h2><p class="muted">Stop by the check-in desk so we know you\'re here. Your group will show up on this page.</p></div>';
+    else if (st) h += goCard(me, rd, st);
+    else if (rd) h += '<div class="card stack"><h2>You\'re checked in</h2><p class="muted">Round ' + rd.n + ' is under way. The team is placing you now, so keep this page open.</p></div>';
+    else h += '<div class="card stack"><h2>You\'re checked in</h2><p class="muted">Grab a snack and say hello to people. Your group will appear here when the first round starts.</p></div>';
+    if (S.ev.surveyOpen && SUPA && me.checkedIn && me.type !== 'guest') h += S.surveyDone ? '<div class="card"><p class="muted">Thanks, your exit survey is in.</p></div>'
+      : '<div class="card stack"><p class="eyebrow">Before you go</p><h2>Tell us who you want to keep talking to</h2><p class="muted">It takes 20 seconds and it\'s how we set up your follow-up intros.</p><button class="primary big" data-act="nav" data-id="survey">Take the exit survey</button></div>';
+    else if (S.ev.surveyOpen) h += '<div class="card stack"><p class="eyebrow">Before you go</p><h2>Tell us who you want to keep talking to</h2><p class="muted">Stop at the exit table. It takes 20 seconds and it\'s how we set up your follow-up intros.</p></div>';
+  }
+  if (S.admin) h += '<p class="small">' + link('console', 'Open the team console') + '</p>';
+  return h + '</div>';
+}
+const safeUrl = u => /^https?:\/\//i.test(u || '') ? u : '';
+const liUrl = p => safeUrl(p && p.linkedin);
+// A name that opens the person's LinkedIn when we have it
+const personLink = (p, cls) => { const u = liUrl(p); return u ? '<a class="' + (cls || 'plink') + '" href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(name(p)) + '<span class="li">LinkedIn</span></a>' : '<span class="' + (cls === 'chip' ? 'chip' : '') + '">' + esc(name(p)) + '</span>'; };
+const linkChips = ids => '<div class="names">' + ids.map(id => personLink(S.people[id], 'chip')).join('') + '</div>';
+function goCard(me, rd, st) {
+  const rep = S.people[st.rep], col = colorOf(rep), isRep = me.id === st.rep;
+  const others = st.cands.filter(id => id !== me.id), anyLinks = [rep, ...st.cands.map(id => S.people[id])].some(p => p && p.id !== me.id && liUrl(p));
+  const co = (rd.companies || {})[rep ? rep.company : ''] || {}, site = safeUrl(co.site);
+  const over = !!S.ev.ended;
+  let h = '<div class="go stack" style="--c:' + col[1] + '"><p class="eyebrow">Round ' + rd.n + (over ? ' · ended' : '') + '</p>';
+  h += isRep ? '<p class="muted">Your station ' + (over ? 'was' : 'is') + '</p><div class="color">' + col[0] + '</div><h3>Your group this round</h3>' + linkChips(st.cands)
+    : '<p class="muted">' + (over ? 'You were at the' : 'Go to the') + '</p><div class="color">' + col[0] + ' station</div><h2>' + (over ? 'You met ' : 'You\'re meeting ') + personLink(rep) + '</h2><p class="muted">' + esc(rep ? rep.company : '') + '</p>'
+      + (others.length ? '<h3>Also in your group</h3>' + linkChips(others) : '');
+  if (anyLinks) h += '<p class="small muted">Tap a name to connect on LinkedIn.</p>';
+  h += '</div>';
+  if (!isRep && rep && (co.about || co.hiring || site)) h += '<div class="card stack"><p class="eyebrow">About ' + esc(rep.company) + '</p>'
+    + (co.about ? '<p>' + esc(co.about) + '</p>' : '') + (co.hiring ? '<p class="muted"><b>Hiring for:</b> ' + esc(co.hiring) + '</p>' : '')
+    + (site ? '<p><a href="' + esc(site) + '" target="_blank" rel="noopener">Visit ' + esc(site.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')) + '</a></p>' : '') + '</div>';
+  if (!over) h += '<div class="card stack"><p class="eyebrow blue">Icebreaker</p><h2>' + esc(rd.prompt || '') + '</h2><p class="muted">Everyone answers, about two minutes in total.</p></div>';
+  const goal = String((isRep ? rd.goalRep : rd.goalCand) || '').trim(), rest = goal.replace(/^leave knowing\s+/i, '');
+  if (goal && !over) h += '<div class="card stack"><p class="eyebrow">Leave knowing</p><p>' + esc(rest.charAt(0).toUpperCase() + rest.slice(1)) + '</p></div>';
+  return h + notesCard(me);
+}
+/* ---------- attendee notes: one running note, saved automatically, emailed back by the team after the event ---------- */
+const notesKey = id => 'tdd-irl-notes-' + id;
+function myNotes(id) {
+  if (!S.myNotes || S.myNotesFor !== id) {
+    S.myNotesFor = id; let m = {}; try { m = JSON.parse(localStorage.getItem(notesKey(id)) || '{}'); } catch (e) {}
+    if (typeof m.text !== 'string') m = { text: Object.keys(m.rounds || {}).sort().map(k => (m.rounds[k].text || '').trim()).filter(Boolean).join('\n\n') };  // carry over notes written per round
+    S.myNotes = m;
+  }
+  return S.myNotes;
+}
+const keepNotes = id => { try { localStorage.setItem(notesKey(id), JSON.stringify(myNotes(id))); } catch (e) {} };
+const NOTE_HINT = 'Saves automatically. You\'ll get an email after the event with your notes.';
+const sayNote = msg => { S.noteStatus = msg; const el = document.getElementById('note-status'); if (el) el.textContent = msg; };
+function pushNotes() {
+  const me = S.people[S.me], m = myNotes(S.me); if (!me || !S.db) return Promise.reject(new Error('offline'));
+  let email = ''; try { email = localStorage.getItem('tdd-irl-email') || ''; } catch (e) {}
+  return S.db.doc('notes/' + me.id).set({ name: name(me), type: me.type, text: m.text || '', email, at: new Date().toISOString() });
+}
+let notesOpen = true; try { notesOpen = localStorage.getItem('tdd-irl-notes-open') !== '0'; } catch (e) {}
+function notesCard(me) {
+  if (!SUPA) return '';
+  const m = myNotes(me.id);
+  return '<details class="card notes" id="notes-box"' + (notesOpen ? ' open' : '') + '><summary><span class="eyebrow">Your notes</span><span class="small muted nhint"></span></summary>'
+    + '<div class="stack" style="margin-top:12px"><textarea id="note-box" data-note="1" aria-label="Your notes" placeholder="Who stood out, what you want to follow up on, anything to remember.">' + esc(m.text || '') + '</textarea>'
+    + '<p class="small muted" id="note-status">' + esc(S.noteStatus || NOTE_HINT) + '</p></div></details>';
+}
+document.addEventListener('toggle', e => { if (e.target && e.target.id === 'notes-box') { notesOpen = e.target.open; try { localStorage.setItem('tdd-irl-notes-open', notesOpen ? '1' : '0'); } catch (err) {} } }, true);
+let noteTimer = null;
+document.addEventListener('input', e => {
+  const t = e.target; if (!t.dataset || !t.dataset.note || !S.me) return;
+  myNotes(S.me).text = t.value.slice(0, 8000); keepNotes(S.me);
+  clearTimeout(noteTimer); noteTimer = setTimeout(() => { pushNotes().then(() => sayNote('Saved. You\'ll get an email after the event with your notes.'), () => sayNote('Saved on this phone. We could not reach the event server just now and will try again when you type.')); }, 1200);
+});
+function deviceInfo() {
+  let id = ''; try { id = localStorage.getItem('tdd-irl-device') || ''; if (!id) { id = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('tdd-irl-device', id); } } catch (e) {}
+  const ua = navigator.userAgent || '', touch = (navigator.maxTouchPoints || 0) > 1;
+  const form = /iPad|Tablet/i.test(ua) || (touch && /Macintosh/i.test(ua)) || (/Android/i.test(ua) && !/Mobile/i.test(ua)) ? 'tablet' : /iPhone|iPod|Android|Mobile/i.test(ua) ? 'phone' : 'laptop';
+  const os = /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : /Android/i.test(ua) ? 'Android' : /Macintosh/i.test(ua) ? 'Mac' : /Windows/i.test(ua) ? 'Windows' : 'Other';
+  return { device: id, form, os };
+}
+function logEvent(kind, extra) { try { if (SUPA && S.db && S.db.logEvent) S.db.logEvent({ kind, ...deviceInfo(), ...extra }).catch(() => {}); } catch (e) {} }
+function findMe() {
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[^a-z]/g, '');
+  const f = norm(S.draft.ff), l = norm(S.draft.fl);
+  const email = (S.draft.fe || '').trim().toLowerCase();
+  if (!f || !l) { S.findErr = 'Enter your first and last name.'; return render(); }
+  if (SUPA && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { S.findErr = 'Enter your email address. Use the one your confirmation for this event was sent to.'; return render(); }
+  const all = Object.values(S.people);
+  let hits = all.filter(p => norm(p.first) === f && norm(p.last) === l);
+  if (!hits.length) hits = all.filter(p => norm(p.last) === l && (norm(p.first).startsWith(f) || f.startsWith(norm(p.first))));
+  // long or shortened last names: match any one word of it, then fall back to a first name only one person has
+  if (!hits.length) hits = all.filter(p => norm(p.first) === f && String(p.last || '').split(/[\s-]+/).some(w => norm(w) === l));
+  if (!hits.length) { const byFirst = all.filter(p => norm(p.first) === f); if (byFirst.length === 1) hits = byFirst; }
+  const typed = { first: String(S.draft.ff || '').trim().slice(0, 60), last: String(S.draft.fl || '').trim().slice(0, 60) };
+  const signIn = id => { logEvent('signin', { person: id }); S.me = id; S.findErr = ''; try { localStorage.setItem('tdd-irl-me', S.me); if (email) localStorage.setItem('tdd-irl-email', email); } catch (e) {} };
+  if (hits.length === 1 && SUPA) {
+    // The email is checked by the database, so nobody's email is ever sent to phones
+    S.finding = true; S.findErr = ''; render();
+    return S.db.checkEmail(hits[0].id, email).then(r => { S.finding = false; if (r === 'ok' || r === 'saved') signIn(hits[0].id); else { logEvent('fail', { ...typed, person: hits[0].id, reason: 'email did not match' }); S.findErr = 'That email does not match your registration. Use the email your confirmation was sent to, or see the check-in desk.'; } render(); },
+      e => { S.finding = false; if (e && e.status === 404) signIn(hits[0].id); else S.findErr = 'We could not check that just now. Check your connection and try again, or see the check-in desk.'; render(); });
+  }
+  if (hits.length === 1) signIn(hits[0].id);
+  else logEvent('fail', { ...typed, reason: hits.length ? 'more than one match' : 'name not on the list' });
+  if (hits.length !== 1) S.findErr = hits.length ? 'More than one person matches that name. Please see the check-in desk.' : 'We couldn\'t find that name. Check the spelling, or see the check-in desk.';
+  render();
+}
+
+/* ---------- room screen ---------- */
+const EVENT_URL = 'https://jovanayc.github.io/tech-hiring-IRL/';
+const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 370 370" class="segno"><g transform="scale(10)"><path fill="#f6f2ea" d="M0 0h37v37h-37z"/><path class="qrline" stroke="#0b0b0b" d="M2 2.5h7m1 0h1m3 0h1m1 0h2m6 0h1m3 0h7m-33 1h1m5 0h1m1 0h3m3 0h4m3 0h2m1 0h1m1 0h1m5 0h1m-33 1h1m1 0h3m1 0h1m2 0h3m3 0h1m1 0h2m2 0h1m1 0h1m2 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m2 0h1m1 0h3m5 0h3m1 0h2m1 0h1m1 0h3m1 0h1m-33 1h1m1 0h3m1 0h1m2 0h2m2 0h4m1 0h1m2 0h1m1 0h1m2 0h1m1 0h3m1 0h1m-33 1h1m5 0h1m3 0h2m2 0h1m11 0h1m5 0h1m-33 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-24 1h1m3 0h1m1 0h1m6 0h1m1 0h1m-24 1h1m4 0h3m1 0h1m1 0h1m1 0h1m2 0h1m4 0h4m5 0h2m-30 1h3m1 0h2m2 0h1m2 0h3m1 0h2m3 0h1m4 0h3m-25 1h1m2 0h2m3 0h1m3 0h1m3 0h1m3 0h1m1 0h1m1 0h2m-31 1h2m1 0h2m2 0h1m4 0h1m1 0h2m3 0h1m1 0h1m1 0h1m2 0h5m-31 1h2m1 0h1m1 0h3m1 0h2m2 0h7m1 0h6m3 0h1m-32 1h3m1 0h1m3 0h2m1 0h1m1 0h2m1 0h1m4 0h1m1 0h1m2 0h2m1 0h1m1 0h2m-30 1h1m2 0h2m1 0h1m1 0h2m3 0h1m1 0h1m1 0h2m2 0h3m1 0h2m1 0h1m-30 1h1m2 0h1m3 0h2m1 0h5m1 0h2m3 0h3m2 0h1m1 0h1m1 0h1m-33 1h1m1 0h1m1 0h8m2 0h1m1 0h5m1 0h1m1 0h2m1 0h2m3 0h1m-33 1h5m4 0h1m1 0h1m4 0h2m1 0h3m1 0h1m2 0h1m2 0h2m1 0h1m-32 1h7m4 0h8m1 0h1m1 0h2m2 0h1m1 0h2m1 0h1m-33 1h1m1 0h2m4 0h3m1 0h2m1 0h2m1 0h1m3 0h2m1 0h1m2 0h3m1 0h1m-32 1h4m1 0h2m1 0h3m3 0h1m1 0h1m1 0h1m1 0h2m2 0h1m1 0h3m1 0h2m-33 1h1m4 0h1m1 0h1m1 0h2m1 0h4m1 0h1m1 0h2m1 0h2m3 0h3m-30 1h1m2 0h1m1 0h2m3 0h4m1 0h1m1 0h1m8 0h1m2 0h1m1 0h1m-32 1h1m7 0h2m1 0h2m3 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h2m1 0h4m-33 1h7m4 0h2m1 0h2m2 0h1m1 0h1m1 0h1m1 0h5m2 0h1m-24 1h4m1 0h1m1 0h1m1 0h1m1 0h3m1 0h2m3 0h1m1 0h1m1 0h1m-33 1h7m1 0h1m1 0h2m3 0h1m4 0h2m1 0h2m1 0h1m1 0h1m1 0h1m-31 1h1m5 0h1m2 0h5m1 0h3m1 0h1m3 0h2m3 0h3m-31 1h1m1 0h3m1 0h1m3 0h1m5 0h3m2 0h2m1 0h6m-30 1h1m1 0h3m1 0h1m3 0h3m2 0h1m1 0h1m2 0h4m1 0h1m1 0h4m1 0h1m-33 1h1m1 0h3m1 0h1m2 0h1m2 0h1m1 0h1m2 0h1m1 0h2m4 0h1m1 0h6m-33 1h1m5 0h1m1 0h3m1 0h1m1 0h3m2 0h1m6 0h5m-31 1h7m3 0h2m1 0h1m2 0h2m4 0h3m2 0h1m3 0h1"/></g></svg>';
+function viewScreen() {
+  // Main room display: round, timer, icebreaker and round guidance. Never shows who is in which group.
+  const rd = curRound(), foot = '<div class="sfoot">The <b>{</b>Dev<b>}</b> Difference</div>';
+  const frame = (round, right, eyebrow, big, extra) => '<div class="screen2"><div class="shead"><div class="sround">' + round + '</div><div class="stimer"' + (right === 'timer' ? ' data-timer="short">' : '>' + right) + '</div></div>'
+    + '<div class="sbody"><p class="seyebrow">' + eyebrow + '</p><h1 class="sq">' + big + '</h1>' + (extra || '') + '</div>' + foot + '</div>';
+  if (S.nodb || !S.ready) return frame('Tech Hiring IRL', '', 'One moment', S.slow || S.nodb ? 'Connecting to the event...' : 'Loading...', '');
+  const guide = '<p class="sguide">Guidance for a round – Make time for everyone to share : )</p><ol class="slist"><li>Icebreaker question</li><li>Learn about company &amp; each other</li><li>’Walk away with’ question</li></ol>';
+  if (!rd) return '<div class="screen2"><div class="shead"><div class="sround">Welcome</div><div class="stimer"></div></div>'
+    + '<div class="sbody swelcome"><div><p class="seyebrow">Tech Hiring IRL</p><h1 class="sq">Check in at the desk, then scan to open the event page on your phone.</h1><p class="sguide">Rounds start soon. Grab a snack and say hello.</p></div>'
+    + (QR_SVG ? '<div class="sqrwrap"><div class="sqr">' + QR_SVG + '</div><p class="sqrcap">Scan for your group</p><p class="sqrurl">' + esc(EVENT_URL.replace(/^https?:\/\//, '').replace(/\/$/, '')) + '</p></div>' : '') + '</div>' + foot + '</div>';
+  if (S.ev.ended) return frame('Round ' + rd.n, 'Ended', 'Round over', 'Thank your group. Check your phone for what’s next.', '');
+  return frame('Round ' + rd.n, 'timer', 'Icebreaker', esc(rd.prompt || ''), guide);
+}
+function stationCards(stations, editable) {
+  return '<div class="stations">' + stations.map(s => {
+    const rep = S.people[s.rep], col = colorOf(rep);
+    return '<div class="station" style="--c:' + col[1] + '"><div class="small muted">' + col[0] + ' station</div><div class="who">' + esc(name(rep)) + '</div><div class="small muted">' + esc(rep ? rep.company : '') + '</div>'
+      + '<div class="names">' + (s.cands.length ? s.cands.map(id => editable
+        ? '<button class="chip' + (S.sel === id ? ' on' : '') + '" data-act="pick" data-id="' + id + '">' + esc(name(S.people[id])) + '</button>'
+        : '<span class="chip">' + esc(name(S.people[id])) + '</span>').join('') : '<span class="muted small">No candidates</span>') + '</div>'
+      + (editable && S.sel && !s.cands.includes(S.sel) ? '<button data-act="moveto" data-id="' + s.rep + '">Move ' + esc(S.people[S.sel] ? S.people[S.sel].first : '') + ' here</button>' : '') + '</div>';
+  }).join('') + '</div>';
+}
+
+function viewConsole() { return viewAttendee(); }
+/* ---------- exit survey table (runs on a team device) ---------- */
+function findForm() {
+  return '<form class="card stack" data-form="find"><label>First name<input id="find-first" data-draft="ff" value="' + dv('ff') + '" autocomplete="given-name"></label>'
+      + '<label>Last name<input id="find-last" data-draft="fl" value="' + dv('fl') + '" autocomplete="family-name"></label>'
+      + (SUPA ? '<label>Email<input id="find-email" type="email" inputmode="email" autocomplete="email" data-draft="fe" value="' + dv('fe') + '"></label><p class="small muted">Use the same email your confirmation for this event was sent to.</p>' : '')
+      + (S.findErr ? '<p class="note">' + esc(S.findErr) + '</p>' : '') + '<button class="primary big" type="submit"' + (S.finding ? ' disabled' : '') + '>' + (S.finding ? 'Checking...' : 'Find me') + '</button></form>';
+}
+function viewKiosk() {
+  let h = '<div class="narrow stack">' + mark('Exit survey');
+  if (S.nodb || !S.ready) return h + waiting() + '</div>';
+  const personal = !S.admin && !S.kioskOk;
+  if (personal) {
+    const mine = S.people[S.me];
+    if (!SUPA) return h + '<div class="card"><p>The exit survey runs on the tablet at the exit table. ' + link('', 'Back to your group') + '</p></div></div>';
+    if (!mine) return h + '<div class="stack"><h2>Sign in to take the exit survey</h2><p class="muted">It takes 20 seconds and it is how we set up your follow-up intros.</p></div>' + findForm() + '</div>';
+    if (S.survey[mine.id] || (S.surveyDone && !S.kiosk)) return h + '<div class="card stack"><h1>Thank you</h1><p class="muted">Your exit survey is in. We\'ll follow up with your intros.</p></div></div>';
+    if (!mine || !mine.checkedIn || mine.type === 'guest') return h + '<div class="card"><p>Find your name and check in at the desk first. ' + link('', 'Back') + '</p></div></div>';
+    if (!S.kiosk || (S.kiosk.who !== mine.id && !S.kiosk.done)) S.kiosk = { who: mine.id, picks: [], none: false, rating: 0 };
+  }
+  const K = S.kiosk;
+  if (K && K.done) return h + '<div class="card stack"><h1>Thank you</h1><p class="muted">We\'ll follow up with your intros. Get home safe.</p><button class="primary big" data-act="knext">' + (personal ? 'Back to my page' : 'Next person') + '</button></div></div>';
+  if (!K) {
+    const todo = Object.values(S.people).filter(p => p.checkedIn && p.type !== 'guest' && !S.survey[p.id]).sort(byName);
+    return h + '<p class="eyebrow">20 seconds</p><h1>Tap your name</h1><div class="stack">' + (todo.length ? todo.map(p => '<button class="big" data-act="kwho" data-id="' + p.id + '">' + esc(name(p)) + '</button>').join('') : '<p class="muted">Everyone who checked in has answered.</p>') + '</div><p class="small">' + link('console', 'Back to the console') + '</p></div>';
+  }
+  const me = S.people[K.who], isRep = me.type === 'rep';
+  const opts = isRep ? present('candidate').map(p => [p.id, name(p)]) : [...new Set(present('rep').map(r => r.company))].map(co => [co, co + ' (' + present('rep').filter(r => r.company === co).map(r => r.first).join(' and ') + ')']);
+  h += '<h1>' + esc(me.first) + ', who do you want to keep talking to?</h1><p class="muted">Tap them in order, starting with your top pick. Tap a name again to take it off your list. ' + (isRep ? 'Answer for yourself, not for your whole team.' : 'We only share this with the team at The Dev Difference.') + '</p><div class="stack">'
+    + opts.map(o => { const rk = K.picks.indexOf(o[0]) + 1; return '<button class="big rank' + (rk ? ' primary' : '') + '" data-act="kpick" data-id="' + esc(o[0]) + '"><span class="num">' + (rk || '') + '</span><span>' + esc(o[1]) + '</span></button>'; }).join('')
+    + '<button class="big' + (K.none ? ' primary' : '') + '" data-act="knone">No one this time</button></div>'
+    + '<div class="stack"><h3>How was tonight?</h3><div class="row stars">' + [1, 2, 3, 4, 5].map(i => '<button class="' + (K.rating === i ? 'on' : '') + '" data-act="krate" data-id="' + i + '" aria-label="' + i + ' of 5">' + i + '</button>').join('') + '</div>'
+    + '<label>What did you think of this event?<textarea id="k-comment" data-draft="kc">' + dv('kc') + '</textarea></label>'
+    + '<label>Anything else you\'d like to share? Feedback, comments, praise, anything.<textarea id="k-other" data-draft="ko">' + dv('ko') + '</textarea></label></div>'
+    + '<div class="row"><button class="primary big" data-act="ksend"' + (K.picks.length || K.none ? '' : ' disabled') + '>Send</button><button class="ghost" data-act="knext">Cancel</button></div></div>';
+  return h;
+}
+
+/* ---------- actions ---------- */
+const noteActions = {};
+const act = Object.assign({}, noteActions, {
+  notme: () => { S.me = null; try { localStorage.removeItem('tdd-irl-me'); } catch (e) {} render(); },
+  nav: d => nav(d.id || ''),
+  kpick: d => { const K = S.kiosk; K.none = false; K.picks = K.picks.includes(d.id) ? K.picks.filter(x => x !== d.id) : [...K.picks, d.id]; render(); },
+  knone: () => { S.kiosk.none = !S.kiosk.none; S.kiosk.picks = []; render(); },
+  krate: d => { S.kiosk.rating = +d.id; render(); },
+  knext: () => { const back = !S.admin && !S.kioskOk; S.kiosk = null; back ? nav('') : render(); },
+  ksend: () => save(async () => { const K = S.kiosk; await S.db.doc('survey/' + K.who).set({ type: S.people[K.who].type, picks: K.picks, none: K.none, rating: K.rating || null, thoughts: (S.draft.kc || '').trim(), comment: (S.draft.ko || '').trim(), at: new Date().toISOString() }); if (K.who === S.me) { S.surveyDone = true; try { localStorage.setItem('tdd-irl-survey', '1'); } catch (e) {} } S.kiosk = { done: true }; S.draft.kc = S.draft.ko = ''; render(); })
+}, typeof teamAct !== 'undefined' ? teamAct : {});
+document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b || b.disabled) return; const f = act[b.dataset.act]; if (f) f(b.dataset); });
+document.addEventListener('submit', e => {
+  e.preventDefault(); const f = e.target.dataset.form;
+  if (f === 'find') findMe();
+});
+boot();
+</script>
+</body>
+</html>

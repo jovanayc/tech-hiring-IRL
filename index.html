@@ -247,10 +247,7 @@ function viewAttendee() {
   h += status;
   if (!me) {
     h += '<div class="stack"><h2>' + (SUPA ? 'Sign in to see your station' : 'Enter your name to see your station') + '</h2></div>'
-      + '<form class="card stack" data-form="find"><label>First name<input id="find-first" data-draft="ff" value="' + dv('ff') + '" autocomplete="given-name"></label>'
-      + '<label>Last name<input id="find-last" data-draft="fl" value="' + dv('fl') + '" autocomplete="family-name"></label>'
-      + (SUPA ? '<label>Email<input id="find-email" type="email" inputmode="email" autocomplete="email" data-draft="fe" value="' + dv('fe') + '"></label><p class="small muted">Use the same email your confirmation for this event was sent to.</p>' : '')
-      + (S.findErr ? '<p class="note">' + esc(S.findErr) + '</p>' : '') + '<button class="primary big" type="submit"' + (S.finding ? ' disabled' : '') + '>' + (S.finding ? 'Checking...' : 'Find me') + '</button></form>';
+      + findForm();
   } else {
     h += '<div class="row" style="justify-content:space-between"><h1>Hi, ' + esc(me.first) + '</h1><button class="ghost small" data-act="notme">Not you?</button></div>';
     const rd = curRound(), st = rd && rd.stations.find(s => s.rep === me.id || s.cands.includes(me.id));
@@ -385,6 +382,12 @@ function stationCards(stations, editable) {
 
 function viewConsole() { return viewAttendee(); }
 /* ---------- exit survey table (runs on a team device) ---------- */
+function findForm() {
+  return '<form class="card stack" data-form="find"><label>First name<input id="find-first" data-draft="ff" value="' + dv('ff') + '" autocomplete="given-name"></label>'
+      + '<label>Last name<input id="find-last" data-draft="fl" value="' + dv('fl') + '" autocomplete="family-name"></label>'
+      + (SUPA ? '<label>Email<input id="find-email" type="email" inputmode="email" autocomplete="email" data-draft="fe" value="' + dv('fe') + '"></label><p class="small muted">Use the same email your confirmation for this event was sent to.</p>' : '')
+      + (S.findErr ? '<p class="note">' + esc(S.findErr) + '</p>' : '') + '<button class="primary big" type="submit"' + (S.finding ? ' disabled' : '') + '>' + (S.finding ? 'Checking...' : 'Find me') + '</button></form>';
+}
 function viewKiosk() {
   let h = '<div class="narrow stack">' + mark('Exit survey');
   if (S.nodb || !S.ready) return h + waiting() + '</div>';
@@ -392,6 +395,8 @@ function viewKiosk() {
   if (personal) {
     const mine = S.people[S.me];
     if (!SUPA) return h + '<div class="card"><p>The exit survey runs on the tablet at the exit table. ' + link('', 'Back to your group') + '</p></div></div>';
+    if (!mine) return h + '<div class="stack"><h2>Sign in to take the exit survey</h2><p class="muted">It takes 20 seconds and it is how we set up your follow-up intros.</p></div>' + findForm() + '</div>';
+    if (S.survey[mine.id] || (S.surveyDone && !S.kiosk)) return h + '<div class="card stack"><h1>Thank you</h1><p class="muted">Your exit survey is in. We\'ll follow up with your intros.</p></div></div>';
     if (!mine || !mine.checkedIn || mine.type === 'guest') return h + '<div class="card"><p>Find your name and check in at the desk first. ' + link('', 'Back') + '</p></div></div>';
     if (!S.kiosk || (S.kiosk.who !== mine.id && !S.kiosk.done)) S.kiosk = { who: mine.id, picks: [], none: false, rating: 0 };
   }
