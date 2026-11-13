@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Tech Hiring IRL: Candidates who attended</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=DM+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f3ee;--ink:#0b0b0c;--mut:#5b5750;--or:#ff6a1a;--card:#fff;--line:#e4dfd6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif}
+.w{max-width:820px;margin:0 auto;padding:28px 18px 60px}.mark{font:800 18px Archivo,sans-serif}.mark b{color:var(--or)}
+.e{color:var(--or);font:700 13px Archivo,sans-serif;letter-spacing:.16em;text-transform:uppercase;margin:26px 0 6px}
+h1{font:800 clamp(28px,6vw,44px)/1.05 Archivo,sans-serif;margin:0 0 10px}.lead{color:var(--mut);margin:0 0 22px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:0 0 14px}
+.c h2{font:800 22px Archivo,sans-serif;margin:0}.t{color:var(--mut);margin:2px 0 10px}
+.pill{display:inline-block;font:600 12px "DM Sans",sans-serif;border-radius:99px;padding:3px 10px;margin:0 6px 6px 0;background:#f1ece3;color:#3a3630}
+.pk{background:var(--or);color:#fff}.row a{display:inline-block;margin:6px 14px 0 0;color:#0b0b0c;font-weight:600;text-decoration:underline;text-decoration-color:var(--or);text-underline-offset:3px}
+.x{margin:8px 0 0;color:#2b2823}.err,.ld{color:var(--mut)}
+</style></head><body><div class="w"><div class="mark">The <b>{Dev}</b> Difference</div><div id="app"><p class="ld">Loading...</p></div></div>
+<script>
+const CFG = { url: "https://syndvtsdtpjbetzbzuzq.supabase.co", key: "sb_publishable_Y38ptqpz6_1jLgmFisG3fw_yvH69LiF" };
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const safe = u => /^https?:\/\//i.test(u || '') ? u : '';
+(async () => {
+  const app = document.getElementById('app'), token = (location.hash || '').replace('#', '').trim();
+  if (!token) { app.innerHTML = '<p class="err">This link is incomplete. Please use the full link from your email.</p>'; return; }
+  try {
+    const r = await fetch(CFG.url + '/rest/v1/rpc/company_shortlist', { method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
+    if (!r.ok) throw new Error('bad');
+    const d = await r.json(), list = d.candidates || [];
+    const picked = list.filter(c => c.picked).length;
+    app.innerHTML = '<p class="e">Tech Hiring IRL · Chicago · Nov 12</p><h1>Candidates who attended</h1><p class="lead">Prepared for ' + esc(d.company) + '. ' + list.length + ' healthtech engineers met your team in person' + (picked ? ', and ' + picked + ' of them are ones your team said they want to keep talking to (shown first).' : '.') + ' Tap LinkedIn to connect.</p>'
+      + list.map(c => '<div class="c"><h2>' + esc((c.first || '') + ' ' + (c.last || '')) + '</h2><p class="t">' + esc([c.title, c.company].filter(Boolean).join(' at ')) + '</p>'
+        + (c.picked ? '<span class="pill pk">Your team wants to keep talking</span>' : '') + (c.roles || []).map(x => '<span class="pill">' + esc(x) + '</span>').join('')
+        + (c.experience ? '<p class="x">' + esc(c.experience) + '</p>' : (c.stack ? '<p class="x"><b>Works with:</b> ' + esc(c.stack) + '</p>' : ''))
+        + '<div class="row">' + (safe(c.linkedin) ? '<a href="' + esc(safe(c.linkedin)) + '" target="_blank" rel="noopener">LinkedIn</a>' : '') + (safe(c.portfolio) ? '<a href="' + esc(safe(c.portfolio)) + '" target="_blank" rel="noopener">Portfolio</a>' : '') + '</div></div>').join('')
+      + '<p class="lead" style="margin-top:22px">Questions or want an intro? Reply to the email this link came in.</p>';
+  } catch (e) { app.innerHTML = '<p class="err">We could not open this link. Check that you used the full link from your email, or reply to us and we will resend it.</p>'; }
+})();
+</script></body></html>
