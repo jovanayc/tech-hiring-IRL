@@ -11,7 +11,7 @@ h1{font:800 clamp(28px,6vw,44px)/1.05 Archivo,sans-serif;margin:0 0 10px}.lead{c
 .c h2{font:800 22px Archivo,sans-serif;margin:0}.t{color:var(--mut);margin:2px 0 10px}
 .pill{display:inline-block;font:600 12px "DM Sans",sans-serif;border-radius:99px;padding:3px 10px;margin:0 6px 6px 0;background:#f1ece3;color:#3a3630}
 .pk{background:var(--or);color:#fff}.row a{display:inline-block;margin:6px 14px 0 0;color:#0b0b0c;font-weight:600;text-decoration:underline;text-decoration-color:var(--or);text-underline-offset:3px}
-.x{margin:8px 0 0;color:#2b2823}.err,.ld{color:var(--mut)}
+.x{margin:8px 0 0;color:#2b2823}.top{display:flex;align-items:center;gap:12px}.top h2{flex:1}.rk{background:var(--ink);color:#fff;border-radius:99px;min-width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;font:800 14px Archivo,sans-serif}.mv button{border:1px solid var(--line);background:#fff;border-radius:8px;width:44px;height:40px;font-size:16px;cursor:pointer}.mv button:disabled{opacity:.3}textarea{width:100%;margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit}.sv{color:var(--or);font-weight:600;min-height:1.4em;margin:0 0 12px}.err,.ld{color:var(--mut)}
 </style></head><body><div class="w"><div class="mark">The <b>{Dev}</b> Difference</div><div id="app"><p class="ld">Loading...</p></div></div>
 <script>
 const CFG = { url: "https://syndvtsdtpjbetzbzuzq.supabase.co", key: "sb_publishable_Y38ptqpz6_1jLgmFisG3fw_yvH69LiF" };
@@ -41,14 +41,24 @@ function track(token) {
   try {
     const r = await fetch(CFG.url + '/rest/v1/rpc/company_shortlist', { method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
     if (!r.ok) throw new Error('bad');
-    const d = await r.json(), list = d.candidates || [];
-    const picked = list.filter(c => c.picked).length;
-    app.innerHTML = '<p class="e">Tech Hiring IRL · Chicago · Nov 12</p><h1>Candidates who attended</h1><p class="lead">Prepared for ' + esc(d.company) + '. ' + list.length + ' healthtech engineers met your team in person' + (picked ? ', and ' + picked + ' of them are ones your team said they want to keep talking to (shown first).' : '.') + ' Tap LinkedIn to connect.</p>'
-      + list.map(c => '<div class="c" data-n="' + esc((c.first || '') + ' ' + (c.last || '')) + '"><h2>' + esc((c.first || '') + ' ' + (c.last || '')) + '</h2><p class="t">' + esc([c.title, c.company].filter(Boolean).join(' at ')) + '</p>'
-        + (c.picked ? '<span class="pill pk">Your team wants to keep talking</span>' : '') + (c.roles || []).map(x => '<span class="pill">' + esc(x) + '</span>').join('')
-        + (c.experience ? '<p class="x">' + esc(c.experience) + '</p>' : (c.stack ? '<p class="x"><b>Works with:</b> ' + esc(c.stack) + '</p>' : ''))
-        + '<div class="row">' + (safe(c.linkedin) ? '<a href="' + esc(safe(c.linkedin)) + '" target="_blank" rel="noopener">LinkedIn</a>' : '') + (safe(c.portfolio) ? '<a href="' + esc(safe(c.portfolio)) + '" target="_blank" rel="noopener">Portfolio</a>' : '') + '</div></div>').join('')
-      + '<p class="lead" style="margin-top:22px">Questions or want an intro? Reply to the email this link came in.</p>';
+    const d = await r.json(); let list = d.candidates || []; const notes = {}; list.forEach(c => { if (c.note) notes[c.id] = c.note; });
+    let timer = null, status = d.savedAt ? 'Your saved ranking is shown.' : '';
+    const persist = () => { status = 'Saving...'; paintStatus(); fetch(CFG.url + '/rest/v1/rpc/save_shortlist', { method: 'POST', keepalive: true, headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ token, payload: { order: list.map(c => c.id), notes } }) }).then(x => { status = x.ok ? 'Saved. Our team can see your ranking and notes.' : 'Could not save. Check your connection and try again.'; paintStatus(); }).catch(() => { status = 'Could not save. Check your connection and try again.'; paintStatus(); }); };
+    const later = () => { status = 'Saving...'; paintStatus(); clearTimeout(timer); timer = setTimeout(persist, 900); };
+    const paintStatus = () => { const el = document.getElementById('st'); if (el) el.textContent = status; };
+    const paint = () => {
+      const picked = list.filter(c => c.picked).length;
+      app.innerHTML = '<p class="e">Tech Hiring IRL · Chicago · Nov 12</p><h1>Candidates who attended</h1><p class="lead">Prepared for ' + esc(d.company) + '. ' + list.length + ' healthtech engineers met your team in person. They are listed in the order your team ranked them' + (picked ? ' (' + picked + ' ranked)' : '') + '. Use the arrows to change the order and add a note on anyone. Changes save automatically and go to our team. Tap LinkedIn to connect.</p><p class="sv" id="st">' + esc(status) + '</p>'
+        + list.map((c, i) => '<div class="c" data-n="' + esc((c.first || '') + ' ' + (c.last || '')) + '"><div class="top"><span class="rk">' + (i + 1) + '</span><h2>' + esc((c.first || '') + ' ' + (c.last || '')) + '</h2><span class="mv"><button data-up="' + i + '" aria-label="Move up"' + (i === 0 ? ' disabled' : '') + '>&#9650;</button><button data-dn="' + i + '" aria-label="Move down"' + (i === list.length - 1 ? ' disabled' : '') + '>&#9660;</button></span></div><p class="t">' + esc([c.title, c.company].filter(Boolean).join(' at ')) + '</p>'
+          + (c.picked ? '<span class="pill pk">Your team wants to keep talking</span>' : '') + (c.roles || []).map(x => '<span class="pill">' + esc(x) + '</span>').join('')
+          + (c.experience ? '<p class="x">' + esc(c.experience) + '</p>' : (c.stack ? '<p class="x"><b>Works with:</b> ' + esc(c.stack) + '</p>' : ''))
+          + '<div class="row">' + (safe(c.linkedin) ? '<a href="' + esc(safe(c.linkedin)) + '" target="_blank" rel="noopener">LinkedIn</a>' : '') + (safe(c.portfolio) ? '<a href="' + esc(safe(c.portfolio)) + '" target="_blank" rel="noopener">Portfolio</a>' : '') + '</div>'
+          + '<textarea data-note="' + esc(c.id) + '" rows="2" placeholder="Add a note for our team (optional)">' + esc(notes[c.id] || '') + '</textarea></div>').join('')
+        + '<p class="lead" style="margin-top:22px">Questions or want an intro? Reply to the email this link came in.</p>';
+    };
+    app.addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; const up = b.dataset.up, dn = b.dataset.dn; const i = up != null ? +up : dn != null ? +dn : -1; if (i < 0) return; const k = up != null ? i - 1 : i + 1; if (k < 0 || k >= list.length) return; [list[i], list[k]] = [list[k], list[i]]; paint(); later(); });
+    app.addEventListener('input', e => { const t = e.target; if (t.dataset && t.dataset.note) { const v = t.value.slice(0, 1000); if (v.trim()) notes[t.dataset.note] = v; else delete notes[t.dataset.note]; later(); } });
+    paint();
     track(token);
   } catch (e) { app.innerHTML = '<p class="err">We could not open this link. Check that you used the full link from your email, or reply to us and we will resend it.</p>'; }
 })();
