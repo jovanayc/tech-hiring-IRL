@@ -17,6 +17,24 @@ h1{font:800 clamp(28px,6vw,44px)/1.05 Archivo,sans-serif;margin:0 0 10px}.lead{c
 const CFG = { url: "https://syndvtsdtpjbetzbzuzq.supabase.co", key: "sb_publishable_Y38ptqpz6_1jLgmFisG3fw_yvH69LiF" };
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const safe = u => /^https?:\/\//i.test(u || '') ? u : '';
+
+function track(token) {
+  try {
+    const ua = navigator.userAgent || '', touch = (navigator.maxTouchPoints || 0) > 1;
+    const form = /iPad|Tablet/i.test(ua) || (touch && /Macintosh/i.test(ua)) || (/Android/i.test(ua) && !/Mobile/i.test(ua)) ? 'tablet' : /iPhone|iPod|Android|Mobile/i.test(ua) ? 'phone' : 'laptop';
+    const os = /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : /Android/i.test(ua) ? 'Android' : /Macintosh/i.test(ua) ? 'Mac' : /Windows/i.test(ua) ? 'Windows' : 'Other';
+    let device = '', n = 1; try { device = localStorage.getItem('tdd-irl-device') || ''; if (!device) { device = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('tdd-irl-device', device); } n = (parseInt(localStorage.getItem('tdd-sl-n-' + token) || '0', 10) || 0) + 1; localStorage.setItem('tdd-sl-n-' + token, String(n)); } catch (e) {}
+    const visit = 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    let secs = 0, clicks = [], dirty = true;
+    const send = () => { try { fetch(CFG.url + '/rest/v1/rpc/log_shortlist', { method: 'POST', keepalive: true, headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ token, visit, payload: { seconds: secs, clicks: clicks.slice(0, 40), device, form, os, visitNo: n } }) }).catch(() => {}); dirty = false; } catch (e) {} };
+    send();
+    setInterval(() => { if (!document.hidden) { secs++; dirty = true; } if (secs % 10 === 0 && dirty && secs > 0) send(); }, 1000);
+    document.addEventListener('visibilitychange', () => { if (document.hidden && dirty) send(); });
+    window.addEventListener('pagehide', () => { if (dirty) send(); });
+    document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('a[href]'); if (!a) return; const card = a.closest('.c');
+      clicks.push({ k: /linkedin\.com/i.test(a.href) ? 'LinkedIn' : 'Portfolio', n: card ? String(card.dataset.n || '').slice(0, 60) : '', s: secs }); dirty = true; send(); }, true);
+  } catch (e) {}
+}
 (async () => {
   const app = document.getElementById('app'), token = (location.hash || '').replace('#', '').trim();
   if (!token) { app.innerHTML = '<p class="err">This link is incomplete. Please use the full link from your email.</p>'; return; }
@@ -26,11 +44,12 @@ const safe = u => /^https?:\/\//i.test(u || '') ? u : '';
     const d = await r.json(), list = d.candidates || [];
     const picked = list.filter(c => c.picked).length;
     app.innerHTML = '<p class="e">Tech Hiring IRL · Chicago · Nov 12</p><h1>Candidates who attended</h1><p class="lead">Prepared for ' + esc(d.company) + '. ' + list.length + ' healthtech engineers met your team in person' + (picked ? ', and ' + picked + ' of them are ones your team said they want to keep talking to (shown first).' : '.') + ' Tap LinkedIn to connect.</p>'
-      + list.map(c => '<div class="c"><h2>' + esc((c.first || '') + ' ' + (c.last || '')) + '</h2><p class="t">' + esc([c.title, c.company].filter(Boolean).join(' at ')) + '</p>'
+      + list.map(c => '<div class="c" data-n="' + esc((c.first || '') + ' ' + (c.last || '')) + '"><h2>' + esc((c.first || '') + ' ' + (c.last || '')) + '</h2><p class="t">' + esc([c.title, c.company].filter(Boolean).join(' at ')) + '</p>'
         + (c.picked ? '<span class="pill pk">Your team wants to keep talking</span>' : '') + (c.roles || []).map(x => '<span class="pill">' + esc(x) + '</span>').join('')
         + (c.experience ? '<p class="x">' + esc(c.experience) + '</p>' : (c.stack ? '<p class="x"><b>Works with:</b> ' + esc(c.stack) + '</p>' : ''))
         + '<div class="row">' + (safe(c.linkedin) ? '<a href="' + esc(safe(c.linkedin)) + '" target="_blank" rel="noopener">LinkedIn</a>' : '') + (safe(c.portfolio) ? '<a href="' + esc(safe(c.portfolio)) + '" target="_blank" rel="noopener">Portfolio</a>' : '') + '</div></div>').join('')
       + '<p class="lead" style="margin-top:22px">Questions or want an intro? Reply to the email this link came in.</p>';
+    track(token);
   } catch (e) { app.innerHTML = '<p class="err">We could not open this link. Check that you used the full link from your email, or reply to us and we will resend it.</p>'; }
 })();
 </script></body></html>
