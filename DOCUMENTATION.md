@@ -4,6 +4,8 @@ Built for the Tech Hiring IRL healthtech hiring event (Thu Nov 12, 2026, Polsky 
 
 No passwords or candidate data are in this document.
 
+For the full event playbook (marketing, emails, assets, timeline) see EVENT_PLAYBOOK.md. For the night itself see RUN_OF_SHOW.md.
+
 ## 1. What it is
 
 One small vanilla-JS app (no framework) with a Supabase (Postgres/PostgREST) backend. A single source (`src/app.js`) is built into several pages by `src/build.py`:
