@@ -54,6 +54,11 @@ function track(token) {
           + (c.experience ? '<p class="x">' + esc(c.experience) + '</p>' : (c.stack ? '<p class="x"><b>Works with:</b> ' + esc(c.stack) + '</p>' : ''))
           + '<div class="row">' + (safe(c.linkedin) ? '<a href="' + esc(safe(c.linkedin)) + '" target="_blank" rel="noopener">LinkedIn</a>' : '') + (safe(c.portfolio) ? '<a href="' + esc(safe(c.portfolio)) + '" target="_blank" rel="noopener">Portfolio</a>' : '') + '</div>'
           + '<textarea data-note="' + esc(c.id) + '" rows="2" placeholder="Add a note for our team (optional)">' + esc(notes[c.id] || '') + '</textarea></div>').join('')
+        + ((d.absent || []).length ? '<p class="e" style="margin-top:34px">Not at the event</p><h1 style="font-size:clamp(22px,5vw,32px)">Completed assessment but wasn\'t able to make it to the event</h1><p class="lead">These candidates did the pre-work but could not attend, and we told them we would advocate for them with you. Tap LinkedIn to connect.</p>'
+          + d.absent.map(c => '<div class="c" data-n="' + esc((c.first || '') + ' ' + (c.last || '')) + '"><h2>' + esc((c.first || '') + ' ' + (c.last || '')) + '</h2><p class="t">' + esc([c.title, c.company].filter(Boolean).join(' at ')) + '</p>'
+            + (c.roles || []).map(x => '<span class="pill">' + esc(x) + '</span>').join('')
+            + (c.experience ? '<p class="x">' + esc(c.experience) + '</p>' : (c.stack ? '<p class="x"><b>Works with:</b> ' + esc(c.stack) + '</p>' : ''))
+            + '<div class="row">' + (safe(c.linkedin) ? '<a href="' + esc(safe(c.linkedin)) + '" target="_blank" rel="noopener">LinkedIn</a>' : '') + (safe(c.portfolio) ? '<a href="' + esc(safe(c.portfolio)) + '" target="_blank" rel="noopener">Portfolio</a>' : '') + '</div></div>').join('') : '')
         + '<p class="lead" style="margin-top:22px">Questions or want an intro? Reply to the email this link came in.</p>';
     };
     app.addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; const up = b.dataset.up, dn = b.dataset.dn; const i = up != null ? +up : dn != null ? +dn : -1; if (i < 0) return; const k = up != null ? i - 1 : i + 1; if (k < 0 || k >= list.length) return; [list[i], list[k]] = [list[k], list[i]]; paint(); later(); });
