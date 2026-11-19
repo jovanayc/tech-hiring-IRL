@@ -1,93 +1,134 @@
-# Tech Hiring IRL App: Documentation
+# Tech Hiring IRL App: Engineering Documentation
 
-Built for the Tech Hiring IRL healthtech hiring event (Thu Nov 12, 2026, Polsky Center, Chicago Booth), hosted by The Dev Difference (TDD). Companies: CareLumi, Nestera, Cofactor AI.
+Last updated Nov 18, 2026. Built by The Dev Difference (TDD) for the Tech Hiring IRL healthtech hiring event (Thu Nov 12, 2026, 5:30 to 7:30pm, Polsky Center, Chicago Booth; companies Nestera, Cofactor AI, CareLumi). It is now an events manager that can run further events: save a finished event, clear the console, import registrants and rehearse with fake data.
 
-No passwords or candidate data are in this document.
+No passwords, candidate data or keys other than the public anon key appear in this document or in the public repo.
 
-For the full event playbook (marketing, emails, assets, timeline) see EVENT_PLAYBOOK.md. For the night itself see RUN_OF_SHOW.md.
+Related: EVENT_PLAYBOOK.md (marketing, emails, assets, timeline), EVENT_LOG.md (what happened and open items), RUN_OF_SHOW.md (the night).
 
-## 1. What it is
+## 1. Architecture at a glance
 
-One small vanilla-JS app (no framework) with a Supabase (Postgres/PostgREST) backend. A single source (`src/app.js`) is built into several pages by `src/build.py`:
+- One vanilla JavaScript app (no framework, no bundler) and a Supabase backend (Postgres plus PostgREST). The browser talks to Supabase with plain `fetch`. There is no server of our own.
+- Single source `src/app.js` (plus `app.css`, `engine.js`, `supa.js`) is built by `src/build.py` into separate pages. Team-only code sits between `/*TEAM-START*/` and `/*TEAM-END*/` markers and is stripped from the public build.
+- The console is a password-gated view inside the same app. The password is checked inside the database: a SHA-256 fingerprint is stored in `event_secrets`, and every private read and write goes through a security-definer function that checks it.
+- Data is a key-value store: table `public.event_docs(path text primary key, data jsonb, updated_at timestamptz)`. A path such as `people/<id>` is a document and the app treats `people/` as a collection.
+- `supa.js` implements a small Firestore-like layer (`doc`, `collection`, `onSnapshot`, `set`, `update`, `delete`) on top of PostgREST. It polls every 2.5 seconds (12 seconds when the tab is hidden), merges public rows with `team_read` rows, and notifies subscribers only when something changed. Writes update the local cache first, then call an RPC.
 
-| Page | Audience | File | URL |
+## 2. Pages and repos
+
+| Page | Audience | File | Where |
 |---|---|---|---|
-| Attendee page | Candidates and company reps at the event | `index.html` | https://jovanayc.github.io/tech-hiring-IRL/ |
-| Exit survey | Everyone, via QR | `survey.html`, `survey-qr.html` | .../survey.html, .../survey-qr.html |
-| Company page | One private link per company | `shortlist.html#<token>` | https://jovanayc.github.io/tech-hiring-IRL/shortlist.html#TOKEN |
-| Team console | TDD team only, password protected | `console.html` | Private repo, and the "Tech Hiring IRL Team Console" artifact in Claude |
+| Attendee page | Candidates and company reps | `index.html` | GitHub Pages, public repo |
+| Exit survey | Everyone, via QR | `survey.html`, `survey-qr.html` | Public repo |
+| Company page | One private link per company | `shortlist.html#<token>` | Public repo (token is the secret) |
+| Team console | TDD team only | `console.html` | Private repo, and the "Tech Hiring IRL Team Console" Claude artifact |
 
-Team-only code is stripped from the public build between `/*TEAM-START*/` and `/*TEAM-END*/` markers.
+- Public repo: `jovanayc/tech-hiring-IRL` (GitHub has moved it; the old URL redirects). Contains built attendee, survey and company pages only. No PII.
+- Private repo: `tech-hiring-irl-internal-console`. Contains `console.html`, the source in `src/`, every SQL file, and the docs. Candidate-loading SQL contains PII, so it never goes in the public repo.
+- Downloads (CSV and JSON) work only when `console.html` is opened as a file in Chrome or Safari. The Claude artifact viewer blocks downloads.
 
-## 2. Attendee experience
+## 3. Data model (paths in `event_docs`)
 
-- Sign in with first name, last name and the email used to register. A match checks the person in. A non-match is logged as a failed attempt.
-- Candidates see their own rotation schedule (rounds and tables) and who they meet. Attendees never see where other people are.
-- Company reps see their candidates and can rank them in the exit survey.
-- Attendees can leave private notes on people they meet (`submit_note`). Notes can be emailed to the attendee after the event.
-- Exit survey: ranking of candidates (company reps) and event feedback. Requires the person to be checked in. Also available standalone through the QR page.
-- The reminder switch `surveyOpen` controls whether the survey shows inside the main page. The standalone survey page is always available.
+Public (readable by anyone with the anon key through the table policy):
 
-## 3. Team console
-
-Password protected (hash stored in the database, password is never in code). Tabs:
-
-- Check-in and roster: mark people in, edit profiles (title, links, experience, stack).
-- Rounds: the rotation (rounds and table assignments).
-- Survey: per company, a "By team member" table of each rep's ranking, plus the merged ranking. The merged rule is each candidate's best (lowest) rank across reps, ties broken by average rank, then last name.
-- Notes: everyone's private notes.
-- Activity: sign-in summary, sign-in log with phone vs laptop, failed attempts (a sign that the link reached unregistered people), devices per person (one person on several devices suggests a shared login), company link activity, company rankings and notes.
-- Profiles hold assessment write-ups and integrity details that are internal only. Scores and integrity details are never shown to companies. Public labels are Strong, Good, Weak.
-
-## 4. Company pages
-
-Each company gets a private link containing a token. The page shows only candidates who attended, in the order that company's team ranked them, with:
-
-- rank badge, name, headline, experience and stack, LinkedIn and portfolio links
-- a line like "Your team ranked this candidate: Luis #1 · Brian #2"
-- a green "Set up next meeting" button (tells TDD to reach out to schedule)
-- up and down arrows to reorder, and a notes box; everything autosaves
-- a section "Completed assessment but wasn't able to make it to the event" (hidden per company when needed)
-
-Not included: assessment scores, integrity info, emails or phone numbers. The Dev Difference is not an interviewing company and is excluded.
-
-Tracking per link (team-only): opens, time on page, clicks, revisit count, device type. Email link previews can inflate opens, and a device is not a person.
-
-## 5. Backend (Supabase)
-
-Table `public.event_docs(path text primary key, data jsonb, updated_at)`.
-
-- Anonymous reads are allowed only on `people/%`, `rounds/%`, `state/%`.
-- Everything private (`private/`, `survey/`, `notes/`, `log/`) is reachable only through security-definer RPCs.
-
-| RPC | Purpose |
+| Path | Content |
 |---|---|
-| `team_ok`, `team_read(pass)`, `team_write` | Console access to private data |
-| `check_email` | Email sign-in match |
-| `log_event` | Sign-ins, failures, opens |
-| `submit_survey`, `submit_note` | Attendee writes (must be checked in) |
-| `company_shortlist(token)` | Company page payload (ranked list, absent section, rank labels) |
-| `save_shortlist(token, payload)` | Company edits: order, notes, meet |
-| `log_shortlist(token, visit, payload)` | Link tracking |
-| `company_rankings(token)` | Rankings for the team |
+| `people/<id>` | first, last, type (`candidate`, `rep`, `guest`), company (reps), color (reps), checkedIn, left, linkedin, sample (test data flag) |
+| `rounds/r<n>` | n, at, prompt, companies info, stations `[{rep, cands[]}]`, sample flag for test rounds |
+| `state/event` | round, endsAt, ended, surveyOpen, surveyClosed, surveyClosesAt, name, date |
+| `state/survey` | Editable exit survey questions (title, help, helpRep, helpCand, rating, q1, q2, extra[]). Survives a new event. |
 
-Key paths: `private/shortlists` (tokens), `private/slr-<slug>` (a company's edits), `private/shortlist-absent` (absent list and hides), `log/*` (activity).
+Private (only through RPCs):
 
-## 6. Setup and deploy
+| Path | Content |
+|---|---|
+| `private/<personId>` | email, phone, linkedin, portfolio, title, company (candidate's employer), sourced, notes, roles, level, status, assessment fields, integrity (internal only), seed, score |
+| `private/config` | companies (name, wants, about, hiring, site), minutes, prompts, goals. Cleared of companies by Start a new event. |
+| `private/shortlists` | map of company page token to company name |
+| `private/slr-<slug>` | a company's edits on its page: order, notes, meet, meetAt, meetEst, at |
+| `private/shortlist-absent` | ids and per-company hides for the "wasn't able to make it" section |
+| `survey/<personId>` | type, picks (ordered ids), none, rating, thoughts, comment, answers (extra questions), at |
+| `notes/<personId>` | an attendee's running notes |
+| `log/*` | activity rows: `signin`, `fail`, `open`, `sl_visit`, `meet_request`, `meet_cancel` (capped at 5000 rows) |
+| `archive/<slug>` | one saved event: name, date, savedAt, counts, and every doc as `docs{path: data}` |
 
-1. Run `supabase-setup.sql` once (base schema).
-2. Run the add-on SQL files in this order: `add-notes` → `add-email-login` → `add-activity-log` → `add-company-shortlists` → `add-shortlist-ranking` → `add-absent-section` → `add-next-meeting` → `add-rank-labels`. `add-link-tracking` goes after shortlists. Each `create or replace` supersedes the earlier version of `company_shortlist`.
-3. Data loaders: `load-approved-candidates.sql`, `load-company-reps.sql`, `add-people-nov12.sql`, `add-assessment-writeups.sql`, `update-three-profiles.sql`. These contain candidate PII, so keep them in the private repo only.
-4. Build: `python3 src/build.py supabase <SUPABASE_URL> <ANON_KEY> out`.
-5. Publish: public repo (GitHub Pages, about a minute to deploy, up to 10 minutes of browser cache), private repo, and republish the console artifact after any change to the HTML.
+`supa.js` `isPrivate` treats `private/`, `survey/`, `notes/` and `log/` as private. `archive/` is never returned by `team_read` or the public policy; it is read only through `list_archives` and `read_archive`.
 
-## 7. Repos
+## 4. Database functions (RPC)
 
-- Public: `jovanayc/tech-hiring-IRL` (built attendee, survey and company pages, no PII).
-- Private: `tech-hiring-irl-internal-console` (console, source in `src/`, all SQL, run of show).
+All are `security definer`, `search_path = public`. Team functions check the password fingerprint with `team_ok(pass)`.
 
-## 8. Known caveats
+| Function | Who | Purpose |
+|---|---|---|
+| `team_ok`, `team_read(pass)`, `team_write(pass, ops)` | Console | Read private rows, apply `set`/`delete` ops |
+| `check_email(person, email)` | Attendee | Email sign-in. Saves the typed email if none is on file |
+| `log_event(payload)` | Attendee | Sign-in, failure, open rows |
+| `submit_survey(person, payload)` | Attendee, exit table | Must be checked in. Refuses when the survey is closed (`surveyClosed` or `surveyClosesAt` passed) |
+| `submit_note(person, payload)` | Attendee | Must be checked in |
+| `company_shortlist(token)` | Company page | Ranked candidates, rank labels, absent section, saved order, notes, meetings |
+| `save_shortlist(token, payload)` | Company page | Saves order, notes and meetings. Writes `log/meet-*` rows for requests and cancels |
+| `log_shortlist(token, visit, payload)` | Company page | Visit tracking (opens, seconds, clicks, device) |
+| `company_rankings(token)` | Team | Rankings for a company |
+| `archive_event(pass, slug, label, event_date)` | Console | Snapshots every row except `archive/*` into `archive/<slug>`, returns counts |
+| `list_archives(pass)`, `read_archive(pass, slug)` | Console | List saved events (no data), read one in full |
+| `reset_event(pass, slug)` | Console | Refuses unless `archive/<slug>` exists. Deletes `people/`, `rounds/`, `state/` (except `state/survey`), `survey/`, `notes/`, `log/` and `private/` (except `private/config`). Keeps `archive/*` and `event_secrets` |
 
-- Test people (for example Jane Kelly, Anna Marie (Test)) may still exist in the database.
-- Rana's name is inconsistent across records and needs cleanup.
-- Console password is shared by the team out of band; rotate it after the event.
+## 5. Setup, SQL order and deploy
+
+1. Run `supabase-setup.sql` once (table, RLS policy, password fingerprint, base functions).
+2. Run the add-on files in this order: `add-notes` → `add-email-login` → `add-activity-log` → `add-company-shortlists` → `add-link-tracking` → `add-shortlist-ranking` → `add-absent-section` → `add-next-meeting` → `add-rank-labels` → `add-meeting-times` → `add-event-archive` → `add-survey-controls`. Each `create or replace` supersedes earlier versions of the same function (for example `company_shortlist`, `submit_survey`, `reset_event`). All are safe to run again.
+3. Data loaders (`load-approved-candidates`, `load-company-reps`, `add-people-nov12`, `add-assessment-writeups`, `update-three-profiles`) contain PII. Private repo only.
+4. Build: `python3 src/build.py supabase <SUPABASE_URL> <ANON_KEY> out`. Output: `index.html`, `survey.html`, `console.html`, `shortlist.html`.
+5. Publish: public repo (GitHub Pages deploys in about a minute, browser cache up to 10 minutes), private repo, and republish the console artifact after any HTML change.
+6. Rotating the console password: update the `team_pass_sha256` row in `event_secrets` with the new SHA-256 hex digest.
+
+## 6. Team console
+
+The console opens with the password and has a left sidebar. The header shows "The {Dev} Difference | IRL Events" and "IRL Events Manager • Team Console". The event name and date appear as an H1 at the top once set. Sidebar items, in order:
+
+1. **Roster and check-in.** Check people in (small green "Here" tag), edit full profiles, mark left early or back, delete. Shows four counts (candidates here, reps here, rounds sent, exit surveys in) on this tab and Groups only. "Add a person" button reveals the full form. "Import registrants from a CSV" accepts a file or pasted text, previews rows (adds, skips duplicates by name or email, flags problems), downloads a template, auto-adds unknown rep companies to Companies. "Paste a list of candidates" is a quick one-per-line import.
+2. **Groups.** Show groups builds a preview using `engine.js` (matches roles to company wants, avoids repeat meetings). Reshuffle, tap a person then a station to move, Send round N to phones, timer (start, add or take off minutes, clear), End round, Undo round, Reopen round, late arrivals added to the best open station.
+3. **Companies and prompts.** Company list (wants, one-line description, hiring, site), Remove all companies, round minutes and prompts. Prompts alternate by round.
+4. **Survey results.** Per company: ranking by team member and a merged ranking (each candidate's best rank across the company's reps, ties by average rank, then last name). Ratings, written feedback (including extra questions) and attendee notes.
+5. **Exit survey.** Push to phones (sets `surveyOpen`, closes 48 hours later by default), change the close time, add 24 or 48 hours, no automatic close, Close now, reopen. Edit the questions (headline with `{name}`, instructions, rating, two open questions, extra open questions, restore defaults). The database refuses late answers.
+6. **Link activity.** "Which event?" picker (live now or any saved event, filtered by year, month or day; saved events render read-only). Company page link status with Close all company links. Collapsible sections with dates and times: company rankings and notes (original vs saved order, moves, meeting requests), meeting request history, company link visits, attendee sign-ins, failed sign-ins and devices.
+7. **Events and test data.** Name and date; Save to the database; download everything as JSON and six CSVs (people and profiles, groups by round, surveys, notes, link tracking and sign-ins, company rankings and meetings); saved events list with read-only people and companies tables; Start a new event (pick the saved event, enter the next name and date, type `START NEW EVENT`); Load test event and Remove all test data.
+8. **Screens.** Room screen, Exit survey table, Attendee page. Exit survey table and Attendee page log the console out. The Room screen has a faded "Back to console" button.
+9. **Tutorial.** Collapsible walkthrough for the team, kept in sync with the features in this document.
+10. **Log out**, then a link to thedevdifference.com.
+
+Sessions: the console logs itself out after 5 minutes with no click, key, touch or scroll (checked every 10 seconds and when a sleeping laptop wakes). Browser Back returns to the console, which asks for the password if logged out.
+
+### Test event rules
+Load test event creates tagged (`sample: true`) reps, "(test)" candidates, two rounds, surveys, link activity and sign-ins. It only loads into an empty event. Remove all test data deletes only tagged rows.
+
+## 7. Attendee, survey and company pages
+
+- Attendees sign in with first name, last name and the registered email. A match checks them in. Failures are logged. Attendees see only their own group, never where others are. LinkedIn links are tappable for their group.
+- Notes: attendees keep one running note, saved automatically and emailed back by the team afterward.
+- Exit survey: shown on the phone only when `surveyOpen` is on and not closed. After close the card disappears and the page says it is closed. Answers already in are kept.
+- Company pages: each company gets a private token link. The page lists attendees in the company's own ranked order with rank labels ("Your team ranked this candidate: Luis #1 · Brian #2"), headline, experience, LinkedIn and portfolio, reorder arrows, a notes box, "Set up next meeting" with a confirmation, and a Cancel meeting request button. A "Completed assessment but wasn't able to make it" section lists absent candidates. Internal data (scores, integrity, emails, phones) never appears. External labels are Strong, Good, Weak. The Dev Difference is not shown as an interviewing company. Visits are tracked per link; email link previews can inflate opens, and a device is not a person.
+- Starting a new event deletes `private/shortlists`, so old company links stop working. Close all company links does the same on demand.
+
+## 8. Privacy and security model
+
+- Anonymous clients can read only `people/`, `rounds/`, `state/` (names, groups, round status, survey questions). Everything else needs the password or a company token through a security-definer RPC.
+- Integrity details and assessment raw scores are internal only.
+- The console password is never in code or docs. Rate limiting is not implemented, so use a strong password and rotate it when team membership changes.
+- Downloaded JSON and CSV files contain emails and phone numbers. Treat them as confidential.
+- The public repo must never contain candidate data or SQL with candidate data.
+
+## 9. Testing
+
+- A local mock server (`@electric-sql/pglite` Postgres behind a small Node HTTP server on port 54399) loads `supabase-setup.sql` plus every add-on file and mimics the PostgREST routes. Build against it with `python3 build.py supabase http://localhost:54399 test-anon-key <dir>`.
+- UI tests use Playwright with Chrome (`--no-sandbox --disable-web-security`). They cover the console flows (roster, import, groups, surveys, events, link activity, idle log out), the company page, and survey closing at the database.
+- When adding an RPC, add it to the mock server's route list or the UI will see "not found".
+
+## 10. Known caveats and open items
+
+- Run `add-event-archive.sql` and `add-survey-controls.sql` before using the Events and Exit survey features fully. Without them, saving fails and late survey answers are blocked only on the page, not in the database.
+- Meeting request times before `add-meeting-times.sql` was run are estimates (labeled "by"), because earlier rows stored only the last save time.
+- Test people from earlier testing may still exist until you clear the event. Rana's name needs cleanup in the Nov 12 data.
+- Cofactor's "keep talking" tag rule is undecided. Nestera and CareLumi rankings emails and attendee notes emails are still to send.
+- No automated test suite lives in the repo yet; the checks above are scripts kept outside it.
+- Keep the Tutorial tab in `app.js` (`TUTORIAL`) and this document updated together whenever the app changes.
