@@ -6,6 +6,25 @@ No passwords, candidate data or keys other than the public anon key appear in th
 
 Related: EVENT_PLAYBOOK.md (marketing, emails, assets, timeline), EVENT_LOG.md (what happened and open items), RUN_OF_SHOW.md (the night).
 
+## 0. What this software is and who uses it
+
+**What it is.** The Tech Hiring IRL app is the event operations tool for The Dev Difference's in-person hiring events. At an event, candidates rotate through small groups, each led by a hiring company's rep. The software checks everyone in, builds the groups and rounds, runs the timer and room screen, collects an exit survey where each person ranks who they want to keep talking to, and then turns those rankings into a private follow-up page for each company. After the event it keeps a permanent record (groups, rankings, link tracking, meeting requests) and can be cleared and reused for the next event.
+
+**What it is not.** It is not a public product or a general applicant tracking system. It holds one event at a time, plus saved copies of finished events. The Dev Difference's AI interviewer (Buddy) and assessments live elsewhere; this app only stores assessment write-ups as internal notes.
+
+**Who uses it, and for what**
+
+| Who | Where they use it | What they do |
+|---|---|---|
+| The Dev Difference organizers (founders and event leads) | Team console (password) | Set up companies and prompts, add or import registrants, run check-in and rounds, push and close the exit survey, read results, send company pages, review link activity, save the event and start the next one |
+| Stage manager and event volunteers | Team console and the room screen | Check people in at the desk, put the room screen on the display, help with late arrivals and the exit table |
+| Candidates (attendees) | Attendee page on their phone | Sign in with their registered email, see their own group and station, keep private notes, take the exit survey |
+| Company reps at the event | Attendee page and the exit survey | See their group, rank the candidates they met in the exit survey |
+| Company hiring teams (for example Nestera, Cofactor AI, CareLumi) | Private company page link | After the event, see the attendees ranked by their own team, reorder, add notes and request next meetings. They never see assessment scores or integrity details |
+| Engineers | The repos, SQL files and this document | Deploy, maintain and extend the app (sections 1 to 10 below) |
+
+**Lifecycle of an event.** Set up companies and registrants, rehearse with the test event, check in and run rounds on the night, push the exit survey, review results and send company pages, watch link activity, then save the event, download a backup and start a new event.
+
 ## 1. Architecture at a glance
 
 - One vanilla JavaScript app (no framework, no bundler) and a Supabase backend (Postgres plus PostgREST). The browser talks to Supabase with plain `fetch`. There is no server of our own.
