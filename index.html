@@ -83,6 +83,24 @@ table.rt{width:100%;border-collapse:collapse;font-size:14px} table.rt th{text-al
 .screen2 .sqrcap{margin:0;font-size:clamp(13px,1.5vw,30px);font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--so)}
 .screen2 .sqrurl{margin:0;font-size:clamp(11px,1.15vw,24px);font-weight:500;color:#cfc8ba}
 details.notes>summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;list-style:none;min-height:28px} details.notes>summary::-webkit-details-marker{display:none} details.notes>summary .nhint::after{content:'Tap to open'} details.notes[open]>summary .nhint::after{content:'Tap to close'} details.notes textarea{min-height:130px}
+
+details.sec>summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;list-style:none;min-height:32px} details.sec>summary::-webkit-details-marker{display:none} details.sec>summary h2{margin:0} details.sec>summary .nhint{font-size:13px;opacity:.6} details.sec>summary .nhint::after{content:'Show'} details.sec[open]>summary .nhint::after{content:'Hide'}
+
+.cwrap{display:grid;grid-template-columns:230px minmax(0,1fr);gap:22px;align-items:start}
+.side{position:sticky;top:12px;display:flex;flex-direction:column;gap:6px;min-height:calc(100vh - 140px)}
+.side button{text-align:left;width:100%}
+.side button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+.side .sidelock{margin-top:auto;background:none;border:0;box-shadow:none;padding:10px 4px;color:var(--muted,#9a9a9a);font-weight:500;cursor:pointer}
+.side .sidelock:hover,.side .sidelock:focus-visible{color:#ff5a4e;background:none}
+.backfab{position:fixed;left:14px;bottom:14px;z-index:50;opacity:.4;font-size:13px;padding:8px 12px;border-radius:999px;cursor:pointer}
+.backfab:hover{opacity:1}
+.cmain{min-width:0}
+@media(max-width:820px){.cwrap{grid-template-columns:1fr}.side{position:static;min-height:0;flex-direction:row;flex-wrap:wrap}.side button{width:auto}.side .sidelock{margin-top:0}}
+
+.consoletop{margin-bottom:26px}
+.consoletop .mark{font-size:26px;letter-spacing:-.01em;line-height:1}
+.consoletop .small{font-size:13px;letter-spacing:.02em}
+.consoletop .mark .lsub{font-size:.62em;font-weight:700;color:var(--text);opacity:.6;margin-left:6px;letter-spacing:0;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -143,6 +161,8 @@ function makeSupaDb(cfg) {
   return { doc, collection, start: errFn => { onError = errFn; loop(); },
     unlock: async p => { const rows = await rpc('team_read', { pass: p }); pass = p; merge(rows, true); notify(); },
     lock: () => { pass = null; },
+    dump: () => Object.fromEntries([...cache.entries()].map(e => [e[0], JSON.parse(JSON.stringify(e[1]))])),
+    teamRpc: async (fn, body) => { if (!pass) throw new Error('Open the team console with the password first.'); return rpc(fn, { pass, ...body }); },
     checkEmail: (person, email) => rpc('check_email', { person, email }),
     logEvent: payload => rpc('log_event', { payload }) };
 }
@@ -156,6 +176,9 @@ const DEFAULT_CFG = { minutes: 17, companies: [], prompts: [] };
 const SUPA = (typeof window !== 'undefined' && window.TDD_SUPABASE) || null;  // set on the no-login build
 const TEAM = !(typeof window !== 'undefined' && window.TDD_BUILD === 'public');  // the public page ships without the console
 const EV0 = { round: 0, endsAt: null, surveyOpen: false, ended: false };
+const SVQ0 = { title: '{name}, who do you want to keep talking to?', help: 'Tap them in order, starting with your top pick. Tap a name again to take it off your list.', helpRep: 'Answer for yourself, not for your whole team.', helpCand: 'We only share this with the team at The Dev Difference.', rating: 'How was tonight?', q1: 'What did you think of this event?', q2: 'Anything else you\'d like to share? Feedback, comments, praise, anything.', extra: [] };
+const svq = () => ({ ...SVQ0, ...(S.svq || {}) });
+const surveyClosed = () => !!S.ev.surveyClosed || !!(S.ev.surveyClosesAt && Date.now() >= Date.parse(S.ev.surveyClosesAt));
 const S = { ready: false, admin: false, people: {}, priv: {}, rounds: {}, ev: { ...EV0 }, survey: {}, notes: {}, log: {}, cfg: DEFAULT_CFG, me: null, draft: {}, ui: { tab: 'roster', open: null }, proposal: null, sel: null, kiosk: null, toast: '' };
 try { S.me = localStorage.getItem('tdd-irl-me'); S.surveyDone = localStorage.getItem('tdd-irl-survey') === '1'; } catch (e) {}
 /* ---------- data ---------- */
@@ -184,6 +207,7 @@ async function boot() {
   }
   db.collection('people').onSnapshot(s => { S.people = toMap(s); S.ready = true; S.slow = false; clearTimeout(slow); requestRender(); }, fail);
   db.collection('rounds').onSnapshot(s => { S.rounds = toMap(s); requestRender(); }, fail);
+  db.doc('state/survey').onSnapshot(d => { S.svq = d.exists ? d.data() : null; requestRender(); }, fail);
   db.doc('state/event').onSnapshot(d => { S.ev = { ...EV0, ...(d.exists ? d.data() : {}) }; requestRender(); }, fail);
   if (TEAM && (S.admin || SUPA)) {
     db.collection('private').onSnapshot(s => { S.priv = toMap(s); S.cfg = { ...DEFAULT_CFG, ...(S.priv.config || {}) }; delete S.cfg.id; requestRender(); clearTimeout(S.liTimer); S.liTimer = setTimeout(syncLinkedIn, 1500); }, fail);
@@ -205,7 +229,7 @@ document.addEventListener('pointerup', releasePress, true); document.addEventLis
 function requestRender() { if (typing() || pressing) S.dirty = true; else render(); }
 document.addEventListener('focusout', () => setTimeout(() => { if (S.dirty && !typing()) render(); }, 0));
 document.addEventListener('input', e => { const k = e.target.dataset && e.target.dataset.draft; if (k) S.draft[k] = e.target.value; });
-window.addEventListener('hashchange', () => { S.route = (location.hash || '').replace('#', ''); render(); });
+window.addEventListener('hashchange', () => { S.route = (location.hash || '').replace('#', ''); if (typeof window !== 'undefined' && window.TDD_BUILD === 'team' && !S.route) S.route = 'console'; render(); });
 const dv = k => esc(S.draft[k] || '');
 S.route = (location.hash || '').replace('#', '');
 if (typeof window !== 'undefined' && window.TDD_BUILD === 'team' && !S.route) S.route = 'console';
@@ -217,6 +241,7 @@ function render() {
   S.dirty = false;
   const r = route();
   let html = r === 'console' ? viewConsole() : r === 'screen' ? viewScreen() : r === 'survey' ? viewKiosk() : viewAttendee();
+  if (S.admin && S.unlocked && r !== 'console' && r !== 'survey') html += '<button type="button" class="backfab" data-act="nav" data-id="console">← Back to console</button>';
   if (S.toast) html += '<div class="toast" role="alert">' + esc(S.toast) + '</div>';
   document.getElementById('app').innerHTML = html;
   tick();
@@ -230,7 +255,7 @@ function tick() {
   });
 }
 setInterval(tick, 1000);
-const mark = sub => '<div class="top"><div class="mark">The <b>{</b>Dev<b>}</b> Difference</div><div class="small muted">' + sub + '</div></div>';
+const mark = (sub, big) => '<div class="top' + (big ? ' consoletop' : '') + '"><div class="mark">The <b>{</b>Dev<b>}</b> Difference' + (big ? ' <span class="lsub">| IRL Events</span>' : '') + '</div><div class="small muted">' + sub + '</div></div>';
 const chips = ids => '<div class="names">' + (ids.length ? ids.map(id => '<span class="chip">' + esc(name(S.people[id])) + '</span>').join('') : '<span class="muted small">Nobody yet</span>') + '</div>';
 const waiting = () => S.nodb && !SUPA ? '<div class="card stack"><h2>Sign in to see your group</h2><p class="muted">This page needs you to be signed in to Claude. You can also find your group on the screen in the room or at the check-in desk.</p></div>'
   : '<div class="card"><p class="muted">' + (S.slow ? 'We can\'t reach the event data yet. Keep this page open and it will load when the connection returns.' : 'Loading the event...') + '</p></div>';
@@ -255,11 +280,12 @@ function viewAttendee() {
     else if (st) h += goCard(me, rd, st);
     else if (rd) h += '<div class="card stack"><h2>You\'re checked in</h2><p class="muted">Round ' + rd.n + ' is under way. The team is placing you now, so keep this page open.</p></div>';
     else h += '<div class="card stack"><h2>You\'re checked in</h2><p class="muted">Grab a snack and say hello to people. Your group will appear here when the first round starts.</p></div>';
-    if (S.ev.surveyOpen && SUPA && me.checkedIn && me.type !== 'guest') h += S.surveyDone ? '<div class="card"><p class="muted">Thanks, your exit survey is in.</p></div>'
+    if (S.ev.surveyOpen && surveyClosed() && SUPA && me.checkedIn && me.type !== 'guest') h += S.surveyDone ? '<div class="card"><p class="muted">Thanks, your exit survey is in.</p></div>' : '<div class="card"><p class="muted">The exit survey is now closed.</p></div>';
+    else if (S.ev.surveyOpen && SUPA && me.checkedIn && me.type !== 'guest') h += S.surveyDone ? '<div class="card"><p class="muted">Thanks, your exit survey is in.</p></div>'
       : '<div class="card stack"><p class="eyebrow">Before you go</p><h2>Tell us who you want to keep talking to</h2><p class="muted">It takes 20 seconds and it\'s how we set up your follow-up intros.</p><button class="primary big" data-act="nav" data-id="survey">Take the exit survey</button></div>';
-    else if (S.ev.surveyOpen) h += '<div class="card stack"><p class="eyebrow">Before you go</p><h2>Tell us who you want to keep talking to</h2><p class="muted">Stop at the exit table. It takes 20 seconds and it\'s how we set up your follow-up intros.</p></div>';
+    else if (S.ev.surveyOpen && !surveyClosed()) h += '<div class="card stack"><p class="eyebrow">Before you go</p><h2>Tell us who you want to keep talking to</h2><p class="muted">Stop at the exit table. It takes 20 seconds and it\'s how we set up your follow-up intros.</p></div>';
   }
-  if (S.admin) h += '<p class="small">' + link('console', 'Open the team console') + '</p>';
+  if (S.admin || (typeof window !== 'undefined' && window.TDD_BUILD === 'team')) h += '<p class="small">' + link('console', 'Open the team console (password needed)') + '</p>';
   return h + '</div>';
 }
 const safeUrl = u => /^https?:\/\//i.test(u || '') ? u : '';
@@ -392,6 +418,7 @@ function viewKiosk() {
   let h = '<div class="narrow stack">' + mark('Exit survey');
   if (S.nodb || !S.ready) return h + waiting() + '</div>';
   const personal = !S.admin && !S.kioskOk;
+  if (surveyClosed() && !(personal && (S.surveyDone || (S.people[S.me] && S.survey[S.me])))) return h + '<div class="card stack"><h1>The exit survey is closed</h1><p class="muted">It is no longer taking answers. Thank you for coming.</p>' + (S.admin ? '<p class="small">' + link('console', 'Back to the console') + '</p>' : '') + '</div></div>';
   if (personal) {
     const mine = S.people[S.me];
     if (!SUPA) return h + '<div class="card"><p>The exit survey runs on the tablet at the exit table. ' + link('', 'Back to your group') + '</p></div></div>';
@@ -408,12 +435,14 @@ function viewKiosk() {
   }
   const me = S.people[K.who], isRep = me.type === 'rep';
   const opts = isRep ? present('candidate').map(p => [p.id, name(p)]) : [...new Set(present('rep').map(r => r.company))].map(co => [co, co + ' (' + present('rep').filter(r => r.company === co).map(r => r.first).join(' and ') + ')']);
-  h += '<h1>' + esc(me.first) + ', who do you want to keep talking to?</h1><p class="muted">Tap them in order, starting with your top pick. Tap a name again to take it off your list. ' + (isRep ? 'Answer for yourself, not for your whole team.' : 'We only share this with the team at The Dev Difference.') + '</p><div class="stack">'
+  const Q = svq();
+  h += '<h1>' + esc(Q.title.replace(/\{name\}/g, me.first)) + '</h1><p class="muted">' + esc(Q.help + ' ' + (isRep ? Q.helpRep : Q.helpCand)) + '</p><div class="stack">'
     + opts.map(o => { const rk = K.picks.indexOf(o[0]) + 1; return '<button class="big rank' + (rk ? ' primary' : '') + '" data-act="kpick" data-id="' + esc(o[0]) + '"><span class="num">' + (rk || '') + '</span><span>' + esc(o[1]) + '</span></button>'; }).join('')
     + '<button class="big' + (K.none ? ' primary' : '') + '" data-act="knone">No one this time</button></div>'
-    + '<div class="stack"><h3>How was tonight?</h3><div class="row stars">' + [1, 2, 3, 4, 5].map(i => '<button class="' + (K.rating === i ? 'on' : '') + '" data-act="krate" data-id="' + i + '" aria-label="' + i + ' of 5">' + i + '</button>').join('') + '</div>'
-    + '<label>What did you think of this event?<textarea id="k-comment" data-draft="kc">' + dv('kc') + '</textarea></label>'
-    + '<label>Anything else you\'d like to share? Feedback, comments, praise, anything.<textarea id="k-other" data-draft="ko">' + dv('ko') + '</textarea></label></div>'
+    + '<div class="stack">' + (Q.rating ? '<h3>' + esc(Q.rating) + '</h3>' : '') + '<div class="row stars">' + [1, 2, 3, 4, 5].map(i => '<button class="' + (K.rating === i ? 'on' : '') + '" data-act="krate" data-id="' + i + '" aria-label="' + i + ' of 5">' + i + '</button>').join('') + '</div>'
+    + (Q.q1 ? '<label>' + esc(Q.q1) + '<textarea id="k-comment" data-draft="kc">' + dv('kc') + '</textarea></label>' : '')
+    + (Q.q2 ? '<label>' + esc(Q.q2) + '<textarea id="k-other" data-draft="ko">' + dv('ko') + '</textarea></label>' : '')
+    + (Q.extra || []).map(x => '<label>' + esc(x.label) + '<textarea data-draft="sx_' + esc(x.id) + '">' + dv('sx_' + x.id) + '</textarea></label>').join('') + '</div>'
     + '<div class="row"><button class="primary big" data-act="ksend"' + (K.picks.length || K.none ? '' : ' disabled') + '>Send</button><button class="ghost" data-act="knext">Cancel</button></div></div>';
   return h;
 }
@@ -427,7 +456,7 @@ const act = Object.assign({}, noteActions, {
   knone: () => { S.kiosk.none = !S.kiosk.none; S.kiosk.picks = []; render(); },
   krate: d => { S.kiosk.rating = +d.id; render(); },
   knext: () => { const back = !S.admin && !S.kioskOk; S.kiosk = null; back ? nav('') : render(); },
-  ksend: () => save(async () => { const K = S.kiosk; await S.db.doc('survey/' + K.who).set({ type: S.people[K.who].type, picks: K.picks, none: K.none, rating: K.rating || null, thoughts: (S.draft.kc || '').trim(), comment: (S.draft.ko || '').trim(), at: new Date().toISOString() }); if (K.who === S.me) { S.surveyDone = true; try { localStorage.setItem('tdd-irl-survey', '1'); } catch (e) {} } S.kiosk = { done: true }; S.draft.kc = S.draft.ko = ''; render(); })
+  ksend: () => save(async () => { const K = S.kiosk; await S.db.doc('survey/' + K.who).set({ type: S.people[K.who].type, picks: K.picks, none: K.none, rating: K.rating || null, thoughts: (S.draft.kc || '').trim(), comment: (S.draft.ko || '').trim(), answers: Object.fromEntries((svq().extra || []).map(x => [x.id, (S.draft['sx_' + x.id] || '').trim()]).filter(e => e[1])), at: new Date().toISOString() }); if (K.who === S.me) { S.surveyDone = true; try { localStorage.setItem('tdd-irl-survey', '1'); } catch (e) {} } S.kiosk = { done: true }; S.draft.kc = S.draft.ko = ''; for (const k of Object.keys(S.draft)) if (k.startsWith('sx_')) S.draft[k] = ''; render(); })
 }, typeof teamAct !== 'undefined' ? teamAct : {});
 document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b || b.disabled) return; const f = act[b.dataset.act]; if (f) f(b.dataset); });
 document.addEventListener('submit', e => {
