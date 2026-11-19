@@ -65,7 +65,7 @@ Private (only through RPCs):
 | `private/config` | companies (name, wants, about, hiring, site), minutes, prompts, goals. Cleared of companies by Start a new event. |
 | `private/links` | company page links: `{token: {company, ev, closesAt, closed}}`. `ev` is `''` for the live event or the slug of the saved event the link shows. Kept when a new event starts. |
 | `private/shortlists` | legacy map of token to company name, used only for links not yet in `private/links` (moved into `private/links` when the event is saved and cleared) |
-| `private/slr-<slug>` | a company's edits on its page for the live event: order, notes, meet, meetAt, meetEst, at |
+| `private/slr-<slug>` | a company's edits on its page for the live event: order, comments (`{candidateId: [{text, at, company}]}`, append only), notes (latest comment text, kept for old readers), meet, meetAt, meetEst, at |
 | `private/aslr-<event>-<slug>` | the same edits made on a link that shows a saved event. Kept when a new event starts. |
 | `private/alog-<event>-...` | visits (`sl-...`) and meeting requests (`meet-...`) made on a saved-event link after it was saved. Kept when a new event starts. |
 | `private/shortlist-absent` | ids and per-company hides for the "wasn't able to make it" section |
@@ -88,7 +88,7 @@ All are `security definer`, `search_path = public`. Team functions check the pas
 | `submit_survey(person, payload)` | Attendee, exit table | Must be checked in. Refuses when the survey is closed (`surveyClosed` or `surveyClosesAt` passed) |
 | `submit_note(person, payload)` | Attendee | Must be checked in |
 | `company_shortlist(token)` | Company page | Ranked candidates, rank labels, absent section, saved order, notes, meetings. Reads the live event or, for a link tied to a saved event, the saved event (through `ed(ev)`). Refuses closed or expired links with "This link is closed." |
-| `save_shortlist(token, payload)` | Company page | Saves order, notes and meetings. Writes `log/meet-*` rows for requests and cancels |
+| `save_shortlist(token, payload)` | Company page | Saves order and meetings, and appends a comment when the payload has `add: {candidateId: text}` (server stamps the time and company; comments cannot be edited). Writes `log/meet-*` rows for requests and cancels |
 | `log_shortlist(token, visit, payload)` | Company page | Visit tracking (opens, seconds, clicks, device) |
 | `company_rankings(token)` | Team | Rankings for a company (same event rules as the page) |
 | `ed(ev)`, `link_get`, `link_slr`, `link_slrpath`, `link_logpath`, `adopt_archive_links(slug)` | Internal | Helpers from `add-persistent-links.sql`: `ed` returns the rows of the live event or a saved event, `link_get` checks a token (unknown, closed, expired), `adopt_archive_links` points links at the saved event and sets their close date. Not callable by the public. |
@@ -99,7 +99,7 @@ All are `security definer`, `search_path = public`. Team functions check the pas
 ## 5. Setup, SQL order and deploy
 
 1. Run `supabase-setup.sql` once (table, RLS policy, password fingerprint, base functions).
-2. Run the add-on files in this order: `add-notes` → `add-email-login` → `add-activity-log` → `add-company-shortlists` → `add-link-tracking` → `add-shortlist-ranking` → `add-absent-section` → `add-next-meeting` → `add-rank-labels` → `add-meeting-times` → `add-event-archive` → `add-survey-controls` → `add-persistent-links`. Each `create or replace` supersedes earlier versions of the same function (for example `company_shortlist`, `submit_survey`, `reset_event`; `add-persistent-links` replaces the company page functions and `reset_event` again, and on its first run re-opens the links of events you already saved and cleared). All are safe to run again.
+2. Run the add-on files in this order: `add-notes` → `add-email-login` → `add-activity-log` → `add-company-shortlists` → `add-link-tracking` → `add-shortlist-ranking` → `add-absent-section` → `add-next-meeting` → `add-rank-labels` → `add-meeting-times` → `add-event-archive` → `add-survey-controls` → `add-persistent-links` → `add-company-comments`. Each `create or replace` supersedes earlier versions of the same function (for example `company_shortlist`, `submit_survey`, `reset_event`; `add-persistent-links` replaces the company page functions and `reset_event` again, and on its first run re-opens the links of events you already saved and cleared). All are safe to run again.
 3. Data loaders (`load-approved-candidates`, `load-company-reps`, `add-people-nov12`, `add-assessment-writeups`, `update-three-profiles`) contain PII. Private repo only.
 4. Build: `python3 src/build.py supabase <SUPABASE_URL> <ANON_KEY> out`. Output: `index.html`, `survey.html`, `console.html`, `shortlist.html`.
 5. Publish: public repo (GitHub Pages deploys in about a minute, browser cache up to 10 minutes), private repo, and republish the console artifact after any HTML change.
@@ -131,6 +131,7 @@ Load test event creates tagged (`sample: true`) reps, "(test)" candidates, two r
 - Notes: attendees keep one running note, saved automatically and emailed back by the team afterward.
 - Exit survey: shown on the phone only when `surveyOpen` is on and not closed. After close the card disappears and the page says it is closed. Answers already in are kept.
 - Company pages: each company gets a private token link. The page lists attendees in the company's own ranked order with rank labels ("Your team ranked this candidate: Luis #1 · Brian #2"), headline, experience, LinkedIn and portfolio, reorder arrows, a notes box, "Set up next meeting" with a confirmation, and a Cancel meeting request button. A "Completed assessment but wasn't able to make it" section lists absent candidates. Internal data (scores, integrity, emails, phones) never appears. External labels are Strong, Good, Weak. The Dev Difference is not shown as an interviewing company. Visits are tracked per link; email link previews can inflate opens, and a device is not a person.
+- Comments: a company adds comments on a candidate; each is saved with the company name and a server timestamp and cannot be edited. "Add another comment" opens a new box. Old single notes appear as the first comment. A company page only ever returns that company's own comments (they live in that company's `slr` row). The team sees all of them, grouped by company with timestamps, on the candidate's profile in the Roster tab (read only) and in Link activity, and in the companies CSV.
 - Company links do not close when an event is saved or a new event starts. A link keeps showing the event it was made for, using the saved copy, and companies can still reorder, add notes and request meetings there. It closes only when the team closes it (Link activity) or one month after the event date (`closesAt`). Reopen gives a link 30 more days. A closed link shows "This link is closed. Reply to the email you got from us and we will reopen it." New links for a new event are added to `private/links` (or `private/shortlists`) with `ev` empty, and are pointed at the event when it is saved and cleared.
 
 ## 8. Privacy and security model
@@ -149,6 +150,7 @@ Load test event creates tagged (`sample: true`) reps, "(test)" candidates, two r
 
 ## 10. Known caveats and open items
 
+- Run `add-company-comments.sql` after `add-persistent-links.sql`, or the company page will keep the old single note box behavior.
 - Run `add-persistent-links.sql` (after the two files below) so company links survive a new event. Until it runs, links from a cleared event stay closed.
 - Run `add-event-archive.sql` and `add-survey-controls.sql` before using the Events and Exit survey features fully. Without them, saving fails and late survey answers are blocked only on the page, not in the database.
 - Meeting request times before `add-meeting-times.sql` was run are estimates (labeled "by"), because earlier rows stored only the last save time.
