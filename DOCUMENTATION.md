@@ -1,6 +1,6 @@
 # Tech Hiring IRL App: Engineering Documentation
 
-Last updated Nov 18, 2026. Built by The Dev Difference (TDD) for the Tech Hiring IRL healthtech hiring event (Thu Nov 12, 2026, 5:30 to 7:30pm, Polsky Center, Chicago Booth; companies Nestera, Cofactor AI, CareLumi). It is now an events manager that can run further events: save a finished event, clear the console, import registrants and rehearse with fake data.
+Last updated Nov 18, 2026 (evening). Built by The Dev Difference (TDD) for the Tech Hiring IRL healthtech hiring event (Thu Nov 12, 2026, 5:30 to 7:30pm, Polsky Center, Chicago Booth; companies Nestera, Cofactor AI, CareLumi). It is now an events manager that can run further events: save a finished event, clear the console, import registrants and rehearse with fake data.
 
 No passwords, candidate data or keys other than the public anon key appear in this document or in the public repo.
 
@@ -63,8 +63,11 @@ Private (only through RPCs):
 |---|---|
 | `private/<personId>` | email, phone, linkedin, portfolio, title, company (candidate's employer), sourced, notes, roles, level, status, assessment fields, integrity (internal only), seed, score |
 | `private/config` | companies (name, wants, about, hiring, site), minutes, prompts, goals. Cleared of companies by Start a new event. |
-| `private/shortlists` | map of company page token to company name |
-| `private/slr-<slug>` | a company's edits on its page: order, notes, meet, meetAt, meetEst, at |
+| `private/links` | company page links: `{token: {company, ev, closesAt, closed}}`. `ev` is `''` for the live event or the slug of the saved event the link shows. Kept when a new event starts. |
+| `private/shortlists` | legacy map of token to company name, used only for links not yet in `private/links` (moved into `private/links` when the event is saved and cleared) |
+| `private/slr-<slug>` | a company's edits on its page for the live event: order, notes, meet, meetAt, meetEst, at |
+| `private/aslr-<event>-<slug>` | the same edits made on a link that shows a saved event. Kept when a new event starts. |
+| `private/alog-<event>-...` | visits (`sl-...`) and meeting requests (`meet-...`) made on a saved-event link after it was saved. Kept when a new event starts. |
 | `private/shortlist-absent` | ids and per-company hides for the "wasn't able to make it" section |
 | `survey/<personId>` | type, picks (ordered ids), none, rating, thoughts, comment, answers (extra questions), at |
 | `notes/<personId>` | an attendee's running notes |
@@ -84,18 +87,19 @@ All are `security definer`, `search_path = public`. Team functions check the pas
 | `log_event(payload)` | Attendee | Sign-in, failure, open rows |
 | `submit_survey(person, payload)` | Attendee, exit table | Must be checked in. Refuses when the survey is closed (`surveyClosed` or `surveyClosesAt` passed) |
 | `submit_note(person, payload)` | Attendee | Must be checked in |
-| `company_shortlist(token)` | Company page | Ranked candidates, rank labels, absent section, saved order, notes, meetings |
+| `company_shortlist(token)` | Company page | Ranked candidates, rank labels, absent section, saved order, notes, meetings. Reads the live event or, for a link tied to a saved event, the saved event (through `ed(ev)`). Refuses closed or expired links with "This link is closed." |
 | `save_shortlist(token, payload)` | Company page | Saves order, notes and meetings. Writes `log/meet-*` rows for requests and cancels |
 | `log_shortlist(token, visit, payload)` | Company page | Visit tracking (opens, seconds, clicks, device) |
-| `company_rankings(token)` | Team | Rankings for a company |
+| `company_rankings(token)` | Team | Rankings for a company (same event rules as the page) |
+| `ed(ev)`, `link_get`, `link_slr`, `link_slrpath`, `link_logpath`, `adopt_archive_links(slug)` | Internal | Helpers from `add-persistent-links.sql`: `ed` returns the rows of the live event or a saved event, `link_get` checks a token (unknown, closed, expired), `adopt_archive_links` points links at the saved event and sets their close date. Not callable by the public. |
 | `archive_event(pass, slug, label, event_date)` | Console | Snapshots every row except `archive/*` into `archive/<slug>`, returns counts |
 | `list_archives(pass)`, `read_archive(pass, slug)` | Console | List saved events (no data), read one in full |
-| `reset_event(pass, slug)` | Console | Refuses unless `archive/<slug>` exists. Deletes `people/`, `rounds/`, `state/` (except `state/survey`), `survey/`, `notes/`, `log/` and `private/` (except `private/config`). Keeps `archive/*` and `event_secrets` |
+| `reset_event(pass, slug)` | Console | Refuses unless `archive/<slug>` exists. First calls `adopt_archive_links` and copies post-save company edits and visits to `aslr-`/`alog-` rows. Then deletes `people/`, `rounds/`, `state/` (except `state/survey`), `survey/`, `notes/`, `log/` and `private/` (except `private/config`, `private/links`, `aslr-` and `alog-` rows). Keeps `archive/*` and `event_secrets` |
 
 ## 5. Setup, SQL order and deploy
 
 1. Run `supabase-setup.sql` once (table, RLS policy, password fingerprint, base functions).
-2. Run the add-on files in this order: `add-notes` → `add-email-login` → `add-activity-log` → `add-company-shortlists` → `add-link-tracking` → `add-shortlist-ranking` → `add-absent-section` → `add-next-meeting` → `add-rank-labels` → `add-meeting-times` → `add-event-archive` → `add-survey-controls`. Each `create or replace` supersedes earlier versions of the same function (for example `company_shortlist`, `submit_survey`, `reset_event`). All are safe to run again.
+2. Run the add-on files in this order: `add-notes` → `add-email-login` → `add-activity-log` → `add-company-shortlists` → `add-link-tracking` → `add-shortlist-ranking` → `add-absent-section` → `add-next-meeting` → `add-rank-labels` → `add-meeting-times` → `add-event-archive` → `add-survey-controls` → `add-persistent-links`. Each `create or replace` supersedes earlier versions of the same function (for example `company_shortlist`, `submit_survey`, `reset_event`; `add-persistent-links` replaces the company page functions and `reset_event` again, and on its first run re-opens the links of events you already saved and cleared). All are safe to run again.
 3. Data loaders (`load-approved-candidates`, `load-company-reps`, `add-people-nov12`, `add-assessment-writeups`, `update-three-profiles`) contain PII. Private repo only.
 4. Build: `python3 src/build.py supabase <SUPABASE_URL> <ANON_KEY> out`. Output: `index.html`, `survey.html`, `console.html`, `shortlist.html`.
 5. Publish: public repo (GitHub Pages deploys in about a minute, browser cache up to 10 minutes), private repo, and republish the console artifact after any HTML change.
@@ -110,7 +114,7 @@ The console opens with the password and has a left sidebar. The header shows "Th
 3. **Companies and prompts.** Company list (wants, one-line description, hiring, site), Remove all companies, round minutes and prompts. Prompts alternate by round.
 4. **Survey results.** Per company: ranking by team member and a merged ranking (each candidate's best rank across the company's reps, ties by average rank, then last name). Ratings, written feedback (including extra questions) and attendee notes.
 5. **Exit survey.** Push to phones (sets `surveyOpen`, closes 48 hours later by default), change the close time, add 24 or 48 hours, no automatic close, Close now, reopen. Edit the questions (headline with `{name}`, instructions, rating, two open questions, extra open questions, restore defaults). The database refuses late answers.
-6. **Link activity.** "Which event?" picker (live now or any saved event, filtered by year, month or day; saved events render read-only). Company page link status with Close all company links. Collapsible sections with dates and times: company rankings and notes (original vs saved order, moves, meeting requests), meeting request history, company link visits, attendee sign-ins, failed sign-ins and devices.
+6. **Link activity.** "Which event?" picker (live now or any saved event, filtered by year, month or day; saved events render read-only). Company page links table (company, event it shows, close date, status, Close or Reopen per link) with Close all company links (two taps) and Reopen all (30 days). Collapsible sections with dates and times: company rankings and notes (original vs saved order, moves, meeting requests), meeting request history, company link visits, attendee sign-ins, failed sign-ins and devices.
 7. **Events and test data.** Name and date; Save to the database; download everything as JSON and six CSVs (people and profiles, groups by round, surveys, notes, link tracking and sign-ins, company rankings and meetings); saved events list with read-only people and companies tables; Start a new event (pick the saved event, enter the next name and date, type `START NEW EVENT`); Load test event and Remove all test data.
 8. **Screens.** Room screen, Exit survey table, Attendee page. Exit survey table and Attendee page log the console out. The Room screen has a faded "Back to console" button.
 9. **Tutorial.** Collapsible walkthrough for the team, kept in sync with the features in this document.
@@ -127,7 +131,7 @@ Load test event creates tagged (`sample: true`) reps, "(test)" candidates, two r
 - Notes: attendees keep one running note, saved automatically and emailed back by the team afterward.
 - Exit survey: shown on the phone only when `surveyOpen` is on and not closed. After close the card disappears and the page says it is closed. Answers already in are kept.
 - Company pages: each company gets a private token link. The page lists attendees in the company's own ranked order with rank labels ("Your team ranked this candidate: Luis #1 · Brian #2"), headline, experience, LinkedIn and portfolio, reorder arrows, a notes box, "Set up next meeting" with a confirmation, and a Cancel meeting request button. A "Completed assessment but wasn't able to make it" section lists absent candidates. Internal data (scores, integrity, emails, phones) never appears. External labels are Strong, Good, Weak. The Dev Difference is not shown as an interviewing company. Visits are tracked per link; email link previews can inflate opens, and a device is not a person.
-- Starting a new event deletes `private/shortlists`, so old company links stop working. Close all company links does the same on demand.
+- Company links do not close when an event is saved or a new event starts. A link keeps showing the event it was made for, using the saved copy, and companies can still reorder, add notes and request meetings there. It closes only when the team closes it (Link activity) or one month after the event date (`closesAt`). Reopen gives a link 30 more days. A closed link shows "This link is closed. Reply to the email you got from us and we will reopen it." New links for a new event are added to `private/links` (or `private/shortlists`) with `ev` empty, and are pointed at the event when it is saved and cleared.
 
 ## 8. Privacy and security model
 
@@ -145,6 +149,7 @@ Load test event creates tagged (`sample: true`) reps, "(test)" candidates, two r
 
 ## 10. Known caveats and open items
 
+- Run `add-persistent-links.sql` (after the two files below) so company links survive a new event. Until it runs, links from a cleared event stay closed.
 - Run `add-event-archive.sql` and `add-survey-controls.sql` before using the Events and Exit survey features fully. Without them, saving fails and late survey answers are blocked only on the page, not in the database.
 - Meeting request times before `add-meeting-times.sql` was run are estimates (labeled "by"), because earlier rows stored only the last save time.
 - Test people from earlier testing may still exist until you clear the event. Rana's name needs cleanup in the Nov 12 data.

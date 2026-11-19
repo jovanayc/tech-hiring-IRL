@@ -40,7 +40,7 @@ function track(token) {
   if (!token) { app.innerHTML = '<p class="err">This link is incomplete. Please use the full link from your email.</p>'; return; }
   try {
     const r = await fetch(CFG.url + '/rest/v1/rpc/company_shortlist', { method: 'POST', headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
-    if (!r.ok) throw new Error('bad');
+    if (!r.ok) { let m = ''; try { m = (await r.json()).message || ''; } catch (_) {} if (/closed/i.test(m)) { app.innerHTML = '<p class="err">This link is closed. Reply to the email you got from us and we will reopen it.</p>'; return; } throw new Error('bad'); }
     const d = await r.json(); let list = d.candidates || []; const notes = {}, meet = {}; list.forEach(c => { if (c.note) notes[c.id] = c.note; if (c.meet) meet[c.id] = true; }); (d.absent || []).forEach(c => { if (c.meet) meet[c.id] = true; });
     let timer = null, status = d.savedAt ? 'Your saved ranking is shown.' : '';
     const persist = () => { status = 'Saving...'; paintStatus(); fetch(CFG.url + '/rest/v1/rpc/save_shortlist', { method: 'POST', keepalive: true, headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ token, payload: { order: list.map(c => c.id), notes, meet } }) }).then(x => { status = x.ok ? 'Saved. Our team can see your ranking and notes.' : 'Could not save. Check your connection and try again.'; paintStatus(); }).catch(() => { status = 'Could not save. Check your connection and try again.'; paintStatus(); }); };
